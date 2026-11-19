@@ -66,8 +66,8 @@ header.top{display:flex;align-items:center;gap:10px;padding-block:14px 8px}
 /* nav */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
   padding:4px max(6px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px))}
-nav .inner{display:grid;grid-template-columns:repeat(6,1fr);max-width:680px;margin:0 auto}
-nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;font-size:.72rem;font-weight:700;color:var(--muted);min-height:52px;border-radius:10px}
+nav .inner{display:grid;grid-template-columns:repeat(7,1fr);max-width:760px;margin:0 auto}
+nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;font-size:.68rem;font-weight:700;color:var(--muted);min-height:52px;border-radius:10px}
 nav button svg{stroke:currentColor}
 nav button[aria-current="page"]{color:var(--brass)}
 nav button[aria-current="page"] svg{stroke-width:2.4}
@@ -152,6 +152,8 @@ input[type=range]{accent-color:var(--brass);width:100%}
 .fb .fnum{fill:var(--fb-muted);font:700 10px var(--f-mono);text-anchor:middle}
 .fb .snm{fill:var(--fb-muted);font:700 10px var(--f-mono);text-anchor:middle;dominant-baseline:central}
 .fb .nt{cursor:pointer}
+.fb .hit{fill:transparent;cursor:pointer}
+.fb .hit:hover{fill:var(--teal);fill-opacity:.25}
 .fb .nt circle{fill:var(--note);stroke:var(--wood-2);stroke-width:1.5;transition:fill .08s}
 .fb .nt text{fill:var(--note-ink);font:700 10px var(--f-mono);text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .fb .nt.root circle{fill:var(--brass)}
@@ -280,6 +282,7 @@ textarea{width:100%;min-height:72px;border-radius:10px;border:1px solid var(--li
     <section class="view" data-view="today" id="v-today"></section>
     <section class="view" data-view="chords" id="v-chords" hidden></section>
     <section class="view" data-view="scales" id="v-scales" hidden></section>
+    <section class="view" data-view="neck" id="v-neck" hidden></section>
     <section class="view" data-view="drills" id="v-drills" hidden></section>
     <section class="view" data-view="ear" id="v-ear" hidden></section>
     <section class="view" data-view="learn" id="v-learn" hidden></section>
@@ -290,6 +293,7 @@ textarea{width:100%;min-height:72px;border-radius:10px;border:1px solid var(--li
   <button data-go="today" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="3"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="9" y1="3" x2="9" y2="7"/><line x1="15" y1="3" x2="15" y2="7"/></svg>Today</button>
   <button data-go="chords"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="5" y1="8" x2="19" y2="8"/><line x1="5" y1="13" x2="19" y2="13"/><circle cx="10" cy="10.5" r="1.4" fill="currentColor"/><circle cx="14" cy="15.5" r="1.4" fill="currentColor"/></svg>Chords</button>
   <button data-go="scales"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h4v-4h4v-4h4V8h4V4"/></svg>Scales</button>
+  <button data-go="neck"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="7" width="20" height="10" rx="1.5"/><line x1="8" y1="7" x2="8" y2="17"/><line x1="14" y1="7" x2="14" y2="17"/><line x1="19" y1="7" x2="19" y2="17"/><circle cx="11" cy="12" r="1.6" fill="currentColor"/></svg>Neck</button>
   <button data-go="drills"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><line x1="12" y1="13" x2="15" y2="9"/><line x1="10" y1="2.5" x2="14" y2="2.5"/></svg>Drills</button>
   <button data-go="ear"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10"/></svg>Ear</button>
   <button data-go="learn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><line x1="12" y1="6" x2="12" y2="20"/></svg>Learn</button>
@@ -375,7 +379,7 @@ function scaleNames(root,key){if(key==='chrom')return SHARP;const minorish=['min
 
 /* ---------------- state + storage ---------------- */
 const LS='gtr-trainer-v1';
-const DEFAULT=()=>({v:1,updatedAt:0,settings:{tone:'steel',lefty:false,level:1,vol:0.8,sens:'normal',phones:false,latency:80,calibrated:false},days:{},today:{d:'',done:{}},changes:{},ear:{mm:{c:0,t:0},wc:{c:0,t:0},nf:{c:0,t:0}},tempo:{},stats:{runs:[],notes:{},chords:{}}});
+const DEFAULT=()=>({v:1,updatedAt:0,settings:{tone:'steel',lefty:false,level:1,vol:0.8,sens:'normal',phones:false,latency:80,calibrated:false},days:{},today:{d:'',done:{}},changes:{},ear:{mm:{c:0,t:0},wc:{c:0,t:0},nf:{c:0,t:0}},tempo:{},stats:{runs:[],notes:{},chords:{}},neck:{find:{}}});
 function merge(d,s){for(const k in s){if(s[k]&&typeof s[k]==='object'&&!Array.isArray(s[k])&&d[k]&&typeof d[k]==='object'&&!Array.isArray(d[k]))d[k]=merge(d[k],s[k]);else d[k]=s[k];}return d;}
 function load(){try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s&&s.v===1)return merge(DEFAULT(),s);}catch(e){}return DEFAULT();}
 let state=load();
@@ -403,7 +407,7 @@ const Sync={ref:null,writing:false,pending:false,t:null,
      if(remote&&remote.v===1&&remote.updatedAt>state.updatedAt){
        state=merge(DEFAULT(),JSON.parse(JSON.stringify(remote)));
        try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}
-       A.apply(); if(!Run.stop) renderView(VIEW); else renderToday();
+       A.apply(); if(!Run.stop) renderView(VIEW); else if(VIEW==='today') renderToday();
      } else if(!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites&&(!remote||remote.updatedAt<state.updatedAt)&&state.updatedAt>0){Sync.push();}
    },()=>{clearTimeout(timer);Sync.ref=null;setSync('local');});
   }catch(e){clearTimeout(timer);setSync('local');}
@@ -498,7 +502,7 @@ const DSP={
 const ONSET_T={low:0.34,normal:0.24,high:0.17},GATE_K={low:4,normal:2.8,high:2};
 const insideClaude=()=>{try{return window.self!==window.top||/claude\.ai|claudeusercontent|anthropic/.test(location.hostname);}catch(e){return true;}};
 const pitchMatch=(a,b)=>{const d=a-b;return Math.abs(d)<0.55||Math.abs(d-12)<0.55||Math.abs(d+12)<0.55;};
-const TPLC=new Map();const TPL=n=>{if(!TPLC.has(n))TPLC.set(n,DSP.template(chordBy(n).f,OPEN));return TPLC.get(n);};
+const TPLC=new Map();const TPL=x=>{const c=typeof x==='string'?chordBy(x):x,k=c.f.join(',');if(!TPLC.has(k))TPLC.set(k,DSP.template(c.f,OPEN));return TPLC.get(k);};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const Mic={on:false,err:'',subs:new Set(),level:0,floorHist:[],floor:0.002,cmin:null,fh:0,lastOnset:-9,prevLin:null,prevFluxN:0,pend:null,stab:{m:null,n:0,t:0},lastNoteT:-9,lastNoteM:null,quiet:0,
  async start(){
@@ -592,7 +596,7 @@ function chordSVG(c,{lefty=state.settings.lefty}={}){
     s+=`<circle class="dot${root?' root':''}" cx="${cx}" cy="${cy}" r="9.5"/><text class="fing" x="${cx}" y="${cy+0.5}">${c.fi[i]||''}</text>`;}}
   return s+'</svg>';
 }
-function fretboardSVG({from=0,to=15,notes=[],id='',lefty=state.settings.lefty}){
+function fretboardSVG({from=0,to=15,notes=[],id='',lefty=state.settings.lefty,targets=false}){
   const cols=[];let x=26;
   for(let f=from;f<=to;f++){const w=f===0?40:56-Math.min(14,(f-1)*0.9);cols.push({f,x,w});x+=w;}
   const W=x+10,top=16,gap=25,H=top+gap*5+30,X=v=>lefty?W-v:v,Y=s=>top+(5-s)*gap,col=f=>cols.find(c=>c.f===f);
@@ -608,6 +612,7 @@ function fretboardSVG({from=0,to=15,notes=[],id='',lefty=state.settings.lefty}){
   else s+=`<line class="fw" x1="${X(bx0)}" y1="${top-8}" x2="${X(bx0)}" y2="${top+gap*5+8}"/>`;
   for(let st=0;st<6;st++){s+=`<line class="str" x1="${X(from===0?cols[0].x+6:bx0)}" y1="${Y(st)}" x2="${X(x)}" y2="${Y(st)}" stroke-width="${(2.3-st*0.3).toFixed(2)}"/>`;
     s+=`<text class="snm" x="${X(13)}" y="${Y(st)}">${SNAME[st]}</text>`;}
+  if(targets)for(let st=0;st<6;st++)for(const c of cols)s+=`<rect class="hit" data-s="${st}" data-f="${c.f}" x="${Math.min(X(c.x),X(c.x+c.w))}" y="${Y(st)-12}" width="${c.w}" height="24" rx="6"/>`;
   for(const n of notes){const c=col(n.f);if(!c)continue;const cx=X(c.x+c.w/2),cy=Y(n.s);
     s+=`<g class="nt ${n.cls||''}" data-s="${n.s}" data-f="${n.f}"${n.k!=null?` data-k="${n.k}"`:''}><circle cx="${cx}" cy="${cy}" r="10.5"/><text x="${cx}" y="${cy+0.5}">${n.label||''}</text></g>`;}
   return s+'</svg>';
@@ -628,6 +633,7 @@ function todayPlan(){
   return [
    {k:'tune',min:2,t:'Tune up',d:'Tune by ear to the reference tones, then check yourself with the live tuner.',go:['ear',{panel:'tuner'}]},
    {k:'spider',min:3,t:'Spider warm-up',d:'One finger per fret, frets 1 to 4 on every string, at 60 bpm.',go:['scales',{scale:'chrom',pos:0}]},
+   {k:'neck',min:2,t:`Note of the day: every ${BOTH[noteOfDay()]}`,d:'Find it on all six strings, low E to high e, against the clock. Beat yesterday’s time.',go:['neck',{panel:'notes',note:noteOfDay()}]},
    {k:'cod',min:2,t:`Chord of the day: ${label(cod.n)}`,d:'Place the shape and run Check my chord, string by string. Fix any red string, then land it five times.',go:['chords',{chord:cod.n}]},
    {k:'changes',min:3,t:`One-minute changes: ${label(pair[0])} ↔ ${label(pair[1])}`,d:'Count clean changes in 60 seconds, by tapping or by letting the app listen. Beat yesterday by one.',go:['drills',{panel:'changes',a:pair[0],b:pair[1]}]},
    {k:'rhythm',min:3,t:`Rhythm switch: ${set.map(label).join(' · ')}`,d:'Four beats per chord at 60 bpm. Keep the strumming hand moving through the change.',go:['drills',{panel:'rhythm',set,per:4,bpm:60}]},
@@ -700,15 +706,15 @@ function insightsHTML(){
 const CS={sel:'C'};
 const CK={mode:'strum',on:false,unsub:null,timer:null,idx:0,rows:[]};
 function ckStop(){if(CK.unsub)CK.unsub();CK.unsub=null;clearTimeout(CK.timer);CK.on=false;releaseRun(ckStop);const b=$('#ck-btn');if(b){b.textContent='Start listening';b.classList.add('teal');}}
-async function ckStart(){
+const curChord=()=>VIEW==='neck'&&NK.cur?NK.cur:chordBy(CS.sel);
+async function ckStart(c){
   if(!await ensureMic())return;claimRun(ckStop);CK.on=true;const b=$('#ck-btn');b.textContent='Stop listening';b.classList.remove('teal');
-  const c=chordBy(CS.sel);
   if(CK.mode==='strum'){$('#ck-out').innerHTML=listenBar(`Strum ${label(c.n)} once`);CK.unsub=Mic.sub(ev=>{if(ev.type==='chord')ckStrum(c,ev);});}
   else{CK.rows=[0,1,2,3,4,5].filter(i=>c.f[i]>=0).map(s=>({s,st:'wait',heard:null}));CK.idx=0;ckPaint(c);ckArm(c);CK.unsub=Mic.sub(ev=>{if(ev.type==='note')ckNote(c,ev);});}
 }
 function ckStrum(c,ev){
   const names=chordNames(c.n),pcs=[...new Set(c.f.map((f,i)=>f>=0?pc(OPEN[i]+f):null).filter(x=>x!=null))];
-  const tp=TPL(c.n),tmax=Math.max(...tp),sim=DSP.cos(ev.ch,tp),missing=pcs.filter(p=>ev.ch[p]<0.2),extra=[...Array(12).keys()].filter(p=>!pcs.includes(p)&&ev.ch[p]>=tp[p]/tmax+0.45);
+  const tp=TPL(c),tmax=Math.max(...tp),sim=DSP.cos(ev.ch,tp),missing=pcs.filter(p=>ev.ch[p]<0.2),extra=[...Array(12).keys()].filter(p=>!pcs.includes(p)&&ev.ch[p]>=tp[p]/tmax+0.45);
   const like=levelChords().map(x=>[x.n,DSP.cos(ev.ch,TPL(x.n))]).sort((a,b)=>b[1]-a[1])[0];
   const clean=sim>=0.84&&!missing.length&&!extra.length;
   const strOf=p=>c.f.map((f,i)=>f>=0&&pc(OPEN[i]+f)===p?`${SNAME[i]} string (${f?'fret '+f:'open'})`:null).filter(Boolean).join(' or ');
@@ -722,7 +728,7 @@ function ckStrum(c,ev){
    <div class="stack" style="gap:8px;margin-top:10px"><div class="row" style="justify-content:space-between"><h3 style="color:var(${clean?'--ok':'--bad'})">${clean?'Clean chord':'Not quite clean'}</h3><span class="score">Match ${Math.round(sim*100)}%</span></div>
    <p class="tones">${pcs.map(p=>`<b style="color:var(${ev.ch[p]>=0.2?'--ok':'--bad'})">${names[p]}</b>`).join(' · ')}</p>
    ${tips.map(t=>`<p class="note">${t}</p>`).join('')}
-   ${!clean&&like[0]!==c.n&&like[1]>sim+0.03?`<p class="note">It sounded closer to ${label(like[0])}.</p>`:''}</div>`;
+   ${!clean&&like[0]!==c.n.split(' ')[0]&&like[1]>sim+0.03?`<p class="note">It sounded closer to ${label(like[0])}.</p>`:''}</div>`;
 }
 function hintSemis(d){const o=((Math.round(d)%12)+12)%12;return o===0?'right note, other octave':o===1?'one fret too high':o===11?'one fret too low':'wrong string or fret';}
 function ckPaint(c){
@@ -917,6 +923,179 @@ function scWaitHear(ev){if(SC.lock||!SC.running)return;const k=SC.seq[SC.i],n=SC
 function scNext(){if(!SC.running||SC.mode!=='wait')return;SC.i=(SC.i+1)%SC.seq.length;scWaitShow();}
 function scSetBpm(v){SC.bpm=Math.max(40,Math.min(200,v));Clock.bpm=SC.bpm;state.tempo[scKey()]=SC.bpm;save();const e=$('#sc-bpm');if(e)e.textContent=SC.bpm;const r=$('#sc-range');if(r)r.value=SC.bpm;}
 function scLoadTempo(){const t=state.tempo[scKey()];SC.bpm=t||(SC.scale==='chrom'?60:SC.scale==='major'||SC.scale==='minor'?60:70);}
+
+/* ---------------- NECK ---------------- */
+const ASCII=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const NK={panel:'notes',note:0,show:'one',root:0,q:'maj',shape:0,cur:null};
+const SHAPES={
+ maj:{E:{rs:0,rel:[0,2,2,1,0,0],fi:[1,3,4,2,1,1],min:0},A:{rs:1,rel:[null,0,2,2,2,0],fi:[0,1,3,3,3,1],min:0},C:{rs:1,rel:[null,0,-1,-3,-2,-3],fi:[0,4,3,1,2,1],min:3},G:{rs:0,rel:[0,-1,-3,-3,-3,0],fi:[3,2,1,1,1,4],min:3},D:{rs:2,rel:[null,null,0,2,3,2],fi:[0,0,1,2,4,3],min:0}},
+ min:{E:{rs:0,rel:[0,2,2,0,0,0],fi:[1,3,4,1,1,1],min:0},A:{rs:1,rel:[null,0,2,2,1,0],fi:[0,1,3,4,2,1],min:0},C:{rs:1,rel:[null,0,-2,-3,-2,null],fi:[0,4,2,1,3,0],min:3},D:{rs:2,rel:[null,null,0,2,3,1],fi:[0,0,1,3,4,2],min:0}}};
+const SHAPE_TIP={
+ maj:{E:'The open E chord with your index finger as a movable nut. The root is under your index on the low E string, so the fret number names the chord.',
+  A:'Open A slid up behind an index barre. The root is under your index on the A string. Flatten your ring finger across three strings, or use three fingers.',
+  C:'Open C moved up the neck, with the index barring where the nut used to be. The root is under your pinky on the A string. Strum from the A string down.',
+  G:'Open G stretched up the neck, with the root on both E strings. The full grip is a stretch, so most players use just its top four strings.',
+  D:'The D triangle moved up. The root is under your index on the D string. Play only the top four strings.'},
+ min:{E:'Open Em behind an index barre. The root is under your index on the low E string.',
+  A:'Open Am behind an index barre, with the root under your index on the A string. The most used minor barre chord.',
+  C:'A moved Cm grip: root under your pinky on the A string. Skip both E strings.',
+  D:'The Dm triangle moved up. The root is on the D string. Top four strings only.'}};
+function shapesFor(root,q){
+  const out=[];
+  for(const [k,sh] of Object.entries(SHAPES[q])){
+    let r=pc(root-OPEN[sh.rs]);if(r<sh.min)r+=12;
+    let f=sh.rel.map(v=>v==null?-1:r+v);
+    if(Math.max(...f)>15&&r-12>=sh.min){r-=12;f=sh.rel.map(v=>v==null?-1:r+v);}
+    const played=f.filter(x=>x>0),lo=Math.min(...f.filter(x=>x>=0));
+    const lib=CHORDS.find(c=>c.f.join(',')===f.join(','));
+    const fi=lib?lib.fi.slice():lo===0?sh.fi.map((x,i)=>f[i]<=0?0:Math.max(1,x-1)):sh.fi.slice();
+    const base=`${ASCII[root]}${q==='min'?'m':''}`;
+    out.push({n:`${base} (${k} shape)`,base,shape:k,rs:sh.rs,rf:r,f,fi,open:f.some(x=>x===0),lo:played.length?Math.min(...played):0});
+  }
+  return out.sort((a,b)=>a.lo-b.lo);
+}
+function noteOfDay(){const pool=state.settings.level===1?[0,2,4,5,7,9,11]:[0,1,2,3,4,5,6,7,8,9,10,11];return pool[dayNum()%pool.length];}
+function renderNeck(){
+  $('#v-neck').innerHTML=`
+  <div><span class="eyebrow">Know the neck</span><h1>${NK.panel==='notes'?'Notes across the neck':'Chords across the neck'}</h1></div>
+  ${seg('nk-panel',[['notes','Notes'],['chords','Chords (CAGED)']],NK.panel,'Neck topic')}
+  <div id="neck-body" class="stack" style="gap:16px"></div>`;
+  NK.panel==='notes'?renderNeckNotes():renderNeckChords();
+}
+/* notes */
+const FN={mode:'tap',on:false,note:0,s:0,found:[],miss:0,t0:0,unsub:null,tick:null};
+function renderNeckNotes(){
+  const n=NK.note,nm=BOTH[n],notes=[];let count=0;
+  for(let s=0;s<6;s++)for(let f=0;f<=15;f++){const p=pc(OPEN[s]+f);if(p===n)count++;
+    if(p===n||NK.show==='all'||(NK.show==='nat'&&SHARP[p].length===1))notes.push({s,f,cls:p===n?'root':'',label:SHARP[p]});}
+  const fd=FN.on||FN.found.length?FN.found:[],fnNote=FN.on||FN.found.length?FN.note:NK.note;
+  const rec=state.neck.find[fnNote];
+  $('#neck-body').innerHTML=`
+  <div class="card stack">
+    <div class="controls">
+      <label class="field"><span>Note</span><select id="nk-note">${BOTH.map((x,i)=>`<option value="${i}"${i===n?' selected':''}>${x}</option>`).join('')}</select></label>
+      <div class="field"><span>Show</span>${seg('nk-show',[['one','Just this note'],['nat','All natural notes'],['all','All notes']],NK.show,'Show')}</div>
+    </div>
+    <div class="fbwrap">${fretboardSVG({from:0,to:15,notes,id:'nk-map'})}</div>
+    <p>${nm} appears ${count} times between the nut and fret 15. They come in octave pairs: from a ${nm} on the E, A or D string, move <b>two strings up and two frets up</b> to find the next one, or <b>three frets up</b> when you land on the B string. Fret 12 repeats the open strings.</p>
+    <p class="note">Tap any dot to hear it, and swipe the neck sideways for the higher frets. Learn the low E and A strings first; they hold the roots of every barre chord.</p>
+  </div>
+  <div class="card stack">
+    <div class="row" style="justify-content:space-between"><h2>Find every ${BOTH[fnNote]}</h2>${seg('fn-mode',[['tap','Tap the neck'],['play','Play it']],FN.mode,'Answer by')}</div>
+    <p class="note">One ${BOTH[fnNote]} on each string, from the low E up to the high e, against the clock. ${FN.mode==='play'?'Play each one on your guitar; the app listens.':'Tap the spot on the fretboard.'} Under 15 seconds with no wrong tries means you know it.</p>
+    <div class="checkrows">${[0,1,2,3,4,5].map(s=>{const x=fd.find(q=>q.s===s);return `<div class="${x?'ok':(FN.on&&FN.s===s?'now':'')}"><b>${SNAME[s]}</b><span>${x?'fret '+x.f:(FN.on&&FN.s===s?'your turn':'')}</span><em>${x?'found':''}</em></div>`;}).join('')}</div>
+    <div class="fbwrap">${fretboardSVG({from:0,to:12,notes:fd.map(x=>({s:x.s,f:x.f,cls:'good',label:SHARP[pc(OPEN[x.s]+x.f)]})),targets:FN.mode==='tap',id:'nk-fb'})}</div>
+    <div class="readout"><div><span class="eyebrow">Time</span><div class="bignote mono" id="fn-time">${FN.on?'0.0':(rec&&rec.last!=null&&FN.found.length===6?rec.last.toFixed(1):'0.0')}</div></div><p class="score" id="fn-msg" style="max-width:32ch;text-align:right">${rec&&rec.best?`Best for ${BOTH[fnNote]}: ${rec.best.toFixed(1)} s`:'No time yet for this note'}</p></div>
+    <button class="btn ${FN.on?'':'primary'} big" data-act="fn-start" id="fn-btn">${FN.on?'Stop':'Start'}</button>
+  </div>`;
+}
+function fnMsg(t){const e=$('#fn-msg');if(e)e.textContent=t;}
+async function fnStart(){
+  if(FN.mode==='play'&&!await ensureMic())return;
+  claimRun(fnStop);Object.assign(FN,{on:true,note:NK.note,s:0,found:[],miss:0,t0:performance.now()});
+  if(FN.mode==='play')FN.unsub=Mic.sub(ev=>{if(ev.type==='note')fnHear(ev);});
+  FN.tick=setInterval(()=>{const e=$('#fn-time');if(e)e.textContent=((performance.now()-FN.t0)/1000).toFixed(1);},100);
+  renderNeckNotes();fnMsg(`Go: ${BOTH[FN.note]} on the low E string.`);
+}
+function fnStop(){clearInterval(FN.tick);if(FN.unsub)FN.unsub();FN.unsub=null;FN.on=false;releaseRun(fnStop);}
+function fnTry(s,f){
+  if(!FN.on)return;
+  if(s!==FN.s){fnMsg(`Stay on the ${SNAME[FN.s]} string for now.`);return;}
+  const p=pc(OPEN[s]+f);
+  if(p===FN.note){FN.found.push({s,f});FN.s++;if(FN.s>=6)return fnDone();renderNeckNotes();fnMsg(`Now the ${SNAME[FN.s]} string.`);}
+  else{FN.miss++;fnMsg(`That’s ${BOTH[p]}. Count from the nearest landmark: frets 5, 7 and 12.`);}
+}
+function fnHear(ev){
+  if(!FN.on)return;const m=Math.round(ev.midi),f=m-OPEN[FN.s];
+  if(f>=0&&f<=15&&pc(m)===FN.note)return fnTry(FN.s,f>12?f-12:f);
+  if(pc(m)===FN.note){fnMsg(`Right note, wrong string. Find it on the ${SNAME[FN.s]} string.`);return;}
+  FN.miss++;fnMsg(`Heard ${BOTH[pc(m)]}. Still looking for ${BOTH[FN.note]} on the ${SNAME[FN.s]} string.`);
+}
+function fnDone(){
+  const secs=(performance.now()-FN.t0)/1000,n=FN.note,rec=state.neck.find[n]||(state.neck.find[n]={best:null,last:null,runs:0});
+  const pb=!rec.best||secs<rec.best;rec.last=+secs.toFixed(1);rec.runs++;if(pb)rec.best=+secs.toFixed(1);save();fnStop();renderNeckNotes();
+  fnMsg(`${secs.toFixed(1)} s, ${FN.miss} wrong ${FN.miss===1?'try':'tries'}.${pb?' New best.':` Best ${rec.best.toFixed(1)} s.`} ${secs<15&&!FN.miss?'You know this note. Pick another.':'Run it again; the third try is usually the fastest.'}`);
+}
+/* chords across the neck */
+const WK={bpm:60,per:8,listen:false,on:false,unsub:null,exp:[],st:null};
+function renderNeckChords(){
+  const shapes=shapesFor(NK.root,NK.q);if(NK.shape>=shapes.length)NK.shape=0;const c=shapes[NK.shape];NK.cur=c;
+  const r=NK.root,tones=[0,NK.q==='min'?3:4,7],inShape=new Set(c.f.map((f,i)=>f>=0?i+'-'+f:null).filter(Boolean)),notes=[];
+  for(let s=0;s<6;s++)for(let f=0;f<=15;f++){const iv=pc(OPEN[s]+f-r);if(tones.includes(iv))notes.push({s,f,cls:(iv===0?'root ':'')+(inShape.has(s+'-'+f)?'':'out'),label:IVL[iv]});}
+  const nm=label(c.base),names=chordNames(c.base);
+  const tonesTxt=tones.map(i=>`<b>${names[pc(r+i)]}</b> ${IVL[i]}`).join(' · ');
+  $('#neck-body').innerHTML=`
+  <div class="card stack">
+    <div class="controls">
+      <label class="field"><span>Chord root</span><select id="nk-root">${KEYS.map((k,i)=>`<option value="${i}"${i===r?' selected':''}>${k}</option>`).join('')}</select></label>
+      <div class="field"><span>Quality</span>${seg('nk-q',[['maj','Major'],['min','Minor']],NK.q,'Quality')}</div>
+    </div>
+    <p class="tones">${nm}: ${tonesTxt}. Every R, ${NK.q==='min'?'♭3':'3'} and 5 on the neck is shown; the bright ones form the selected shape.</p>
+    <div class="fbwrap">${fretboardSVG({from:0,to:15,notes,id:'nk-ch'})}</div>
+    <div class="chipset">${shapes.map((x,i)=>`<button class="chip" data-act="nk-shape" data-i="${i}" aria-pressed="${i===NK.shape}">${x.shape} shape · ${x.open?'open':'fret '+x.lo}</button>`).join('')}</div>
+  </div>
+  <div class="cols">
+    <div class="stack"><div class="card stack">
+      <div class="stage"><div>${chordSVG(c)}</div>
+        <div class="stack" style="gap:10px;min-width:0"><div class="cname" style="font-size:2rem">${nm}</div><p class="tones">${c.shape} shape · root on the ${SNAME[c.rs]} string, ${c.rf?'fret '+c.rf:'open'}</p><p>${SHAPE_TIP[NK.q][c.shape]}</p></div></div>
+      <div class="row"><button class="btn primary" data-act="strum">Strum</button><button class="btn" data-act="arp">Pick string by string</button>
+        <button class="btn" data-act="nk-shape" data-i="${(NK.shape+shapes.length-1)%shapes.length}" aria-label="Previous shape">‹ Lower</button><button class="btn" data-act="nk-shape" data-i="${(NK.shape+1)%shapes.length}" aria-label="Next shape">Higher ›</button></div>
+    </div>
+    <div class="card stack">
+      <div class="row" style="justify-content:space-between"><h2>Check this shape</h2>${seg('ck-mode',[['strum','Strum'],['strings','String by string']],CK.mode,'Check mode')}</div>
+      <p class="note">${CK.mode==='strings'?'String by string confirms you’re on the right frets, not just the right chord.':'Strum the shape once; the app checks every note of the chord.'}</p>
+      <button class="btn teal big" data-act="ck-start" id="ck-btn">Start listening</button>
+      <div id="ck-out"></div>
+    </div></div>
+    <div class="card stack">
+      <h2>Walk the neck</h2>
+      <p class="note">Play ${nm} in all ${shapes.length} shapes, up the neck and back down, ${WK.per} beats each. The next shape shows ahead of time.</p>
+      <div class="rs-stage">
+        <div class="rs-now"><span class="eyebrow">Play</span><div id="wk-now-svg" style="max-width:170px">${chordSVG(shapes[0])}</div><div class="score" id="wk-now-name">${shapes[0].shape} shape · ${shapes[0].open?'open':'fret '+shapes[0].lo}</div></div>
+        <div class="rs-next" id="wk-next"><span class="eyebrow">Next</span><div id="wk-next-svg" style="max-width:110px">${chordSVG(shapes[1])}</div><div class="score" id="wk-next-name">${shapes[1].shape} shape</div></div>
+      </div>
+      <div class="readout">${beatsHTML(WK.per,'wk-beats')}<span class="score" id="wk-info"></span></div>
+      <div class="field"><span>Tempo</span>${tempoCtl('wk',WK.bpm)}</div>
+      <div class="controls">
+        <div class="field"><span>Beats per shape</span>${seg('wk-per',[['4','4'],['8','8']],WK.per,'Beats per shape')}</div>
+        <div class="field"><span>Listen to my playing</span>${seg('wk-listen',[['0','Off'],['1','Listen & check']],WK.listen?'1':'0','Listen')}</div>
+      </div>
+      ${WK.listen?`<div class="fbchips" id="wk-fb"></div><p class="note" id="wk-sum">${listenNote()}</p>`:''}
+      <button class="btn primary big" data-act="wk-start" id="wk-btn">Start</button>
+    </div>
+  </div>`;
+  centreOn('#nk-ch .nt:not(.out)');
+}
+function centreOn(sel){requestAnimationFrame(()=>{const els=$$(sel);if(!els.length)return;const w=els[0].closest('.fbwrap');if(!w||w.scrollWidth<=w.clientWidth)return;const wr=w.getBoundingClientRect(),rs=els.map(e=>e.getBoundingClientRect()),lo=Math.min(...rs.map(r=>r.left)),hi=Math.max(...rs.map(r=>r.right));w.scrollLeft+=(lo+hi)/2-(wr.left+wr.width/2);});}
+function wkSeq(n){const up=[...Array(n).keys()];return up.concat(up.slice(1,-1).reverse());}
+function wkShow(shapes,seq,si){const c=shapes[seq[si%seq.length]],n=shapes[seq[(si+1)%seq.length]];$('#wk-now-svg').innerHTML=chordSVG(c);$('#wk-now-name').textContent=`${c.shape} shape · ${c.open?'open':'fret '+c.lo}`;$('#wk-next-svg').innerHTML=chordSVG(n);$('#wk-next-name').textContent=`${n.shape} shape`;}
+function wkChip(t,c){const el=$('#wk-fb');if(!el)return;const s=document.createElement('span');s.className=c;s.textContent=t;el.prepend(s);while(el.children.length>5)el.lastChild.remove();}
+function wkSum(final){const el=$('#wk-sum');if(!el||!WK.st)return;const s=WK.st;if(!s.n)return;el.textContent=`${s.n} shapes: ${s.right} sounded right, ${s.good} of those on time${s.miss?`, ${s.miss} not heard`:''}.${final?(s.good>=s.n*0.8?' Next time, try 4 beats per shape.':' Stay at this tempo and say each shape name as you move.'):''}`;}
+async function wkStart(){
+  if(WK.listen&&!await ensureMic())return;
+  const shapes=shapesFor(NK.root,NK.q),seq=wkSeq(shapes.length),guide=guideOK(WK.listen);
+  claimRun(wkStop);WK.on=true;WK.exp=[];WK.st={n:0,good:0,right:0,miss:0,offs:[]};
+  const b=$('#wk-btn');b.textContent='Stop';b.classList.remove('primary');const fb=$('#wk-fb');if(fb)fb.innerHTML='';
+  if(WK.listen)WK.unsub=Mic.sub(ev=>{
+    if(ev.type==='onset'){const w=Math.min(0.3,60/WK.bpm*0.45),e=WK.exp.find(e=>!e.done&&e.onsetT==null&&Math.abs(ev.t-e.t)<=w);if(e)e.onsetT=ev.t;}
+    else if(ev.type==='chord'){const e=WK.exp.find(e=>!e.done&&e.onsetT===ev.t);if(!e)return;e.done=true;
+      const off=e.onsetT-e.t,right=DSP.cos(ev.ch,TPL(e.c))>=0.6,ontime=Math.abs(off)<=0.1;WK.st.n++;WK.st.offs.push(off);if(right)WK.st.right++;if(right&&ontime)WK.st.good++;
+      wkChip(`${e.c.shape} shape · ${right?(ontime?'on time':Math.round(Math.abs(off)*1000)+' ms '+(off<0?'early':'late')):'not '+label(e.c.base)+'?'}`,right&&ontime?'good':right?'late':'wrong');wkSum();}
+  });
+  let shown=-1;
+  Clock.start(WK.bpm,1,(k,t)=>{
+    A.click(t,k%4===0);
+    if(WK.listen){const now=A.ctx.currentTime-(state.settings.latency||0)/1000;for(const e of WK.exp){if(!e.done&&now-e.t>0.6){e.done=true;WK.st.n++;WK.st.miss++;wkChip(`${e.c.shape} shape · no strum heard`,'wrong');wkSum();}}WK.exp=WK.exp.filter(e=>!e.done);}
+    if(k<4){at(t,()=>{const i=$('#wk-info');if(i)i.textContent=`Count-in ${4-k}`;lightBeat('wk-beats',-1);});if(k===0)at(t,()=>wkShow(shapes,seq,0));return;}
+    const bt=k-4,si=Math.floor(bt/WK.per),bi=bt%WK.per,c=shapes[seq[si%seq.length]];
+    if(bi===0){if(guide)A.strum(c.f,t);if(WK.listen)WK.exp.push({t,c,onsetT:null,done:false});}
+    at(t,()=>{if(si!==shown){shown=si;wkShow(shapes,seq,si);}lightBeat('wk-beats',bi);const nx=$('#wk-next');if(nx)nx.classList.toggle('ready',bi===WK.per-1);const i=$('#wk-info');if(i)i.textContent=`Shape ${si+1}`;});
+  });
+}
+function wkStop(){Clock.stop();if(WK.unsub)WK.unsub();WK.unsub=null;const was=WK.on;WK.on=false;releaseRun(wkStop);
+  const b=$('#wk-btn');if(b){b.textContent='Start';b.classList.add('primary');}lightBeat('wk-beats',-1);
+  if(was&&WK.st&&WK.st.n>=4){const s=WK.st,off=s.offs.length?Math.round(1000*s.offs.reduce((a,b)=>a+b,0)/s.offs.length):null;
+    pushRun({d:dkey(),kind:'walk',name:`${label(NK.cur?NK.cur.base:'C')} across the neck`,acc:Math.round(100*(s.right+s.good)/(2*s.n)),off,n:s.n});save();wkSum(true);}}
 
 /* ---------------- DRILLS ---------------- */
 const DR={panel:'rhythm'};
@@ -1183,6 +1362,10 @@ const LESSONS=[
  {t:'The metronome is a treadmill',a:'Set it slow enough that you never fall off. Speed comes from clean repetitions, not from turning the dial.',b:'Rule of three: three clean runs in a row, add 5 bpm. One mistake, drop 5 bpm. Your fingers learn exactly what you repeat, mistakes included.',h:['Spider warm-up at 60 bpm, one note per click.','Move to two notes per click once 80 bpm feels easy.','Slide the frets window up the neck as your stretch improves.'],go:['scales',{scale:'chrom',pos:0}],cta:'Open spider warm-up'},
  {t:'Steel or nylon: highway or boulevard',a:'Steel strings are a narrow highway: slim neck, high tension, bright and loud. Nylon is a wide boulevard: flat wide neck, low tension, warm and soft on the fingertips.',b:'On nylon, keep the thumb low behind the neck and bring fingers straight down. On steel, press closer to the fret and expect two to three weeks before calluses form.',h:['Fret any note and press with the least force that still rings clean. It’s less than you think.','Move the fingertip right behind the fret wire and try again. It needs even less.','Set the app sound to match your guitar in Settings.'],go:['settings',{}],cta:'Open settings'},
 ];
+LESSONS.push(
+ {t:'The 12th fret is a mirror',a:'The neck repeats itself at fret 12, like a mirror laid across the double dots. Everything between the nut and fret 12 appears again above it, an octave higher.',b:'So each string has only 12 frets to learn, and the open-string names (E A D G B E) come back at fret 12.',h:['Play each open string, then the same string at fret 12. Same names, higher.','Find G on the low E string (fret 3), then find it again at fret 15.','Run Find every note for E: one on every string.'],go:['neck',{panel:'notes',note:4,show:'one'}],cta:'Find every E'},
+ {t:'Octaves are a knight’s move',a:'Like a chess knight, an octave jumps in an L: two strings up and two frets up. When the jump lands on the B string it stretches to three frets, because that string is tuned a step lower than the pattern.',b:'Every note on the low E and A strings has a twin on the D and G strings this way. Learn the two lowest strings and the octave move hands you two more for free.',h:['Play C on the A string (fret 3), then two strings up and two frets up: G string, fret 5. Same note, higher.','From E on the D string (fret 2), jump to the B string: fret 5, three frets up.','Open the note map for C and trace each knight’s move with your finger before playing it.'],go:['neck',{panel:'notes',note:0,show:'one'}],cta:'Show every C'},
+ {t:'One chord, five addresses (CAGED)',a:'A chord isn’t a place, it’s a set of notes. Like a family with five houses on one street, C major lives in five shapes up the neck: the open C, A, G, E and D shapes, each slid until its root lands on a C.',b:'The shapes link like train carriages: where one ends, the next begins, sharing notes. The order never changes (C, A, G, E, D, then C again), so learning the chain once lets you play any chord anywhere.',h:['Pick C major and step through the five shapes. Note which string the root is on in each.','Check each shape with String by string so you know the frets are right, not just the sound.','Walk the neck at 60 bpm, 8 beats per shape. Say the shape name as you move.'],go:['neck',{panel:'chords',root:0,q:'maj'}],cta:'Walk C across the neck'});
 LESSONS.push({t:'How the app listens: a teacher with eyes closed',a:'Picture a teacher who can’t see your hands. They hear footsteps (each new pluck or strum), recognise voices (the pitch of a single note) and taste the mix in a soup (which notes make up a strummed chord).',b:'That’s exactly what the app does. It catches the moment each note starts, measures its pitch, and compares a strum’s blend of notes with the chord you should be playing. The clearer the sound reaching the mic, the better it judges.',h:['Prop the phone or tablet about 30 cm from the sound hole, in a quiet room.','Run Settings → Calibrate timing once per device, and again if you switch to Bluetooth headphones.','Warm up with the live tuner and one chord check before the session.'],go:['settings',{}],cta:'Open listening settings'});
 function renderLearn(){
   $('#v-learn').innerHTML=`
@@ -1257,14 +1440,14 @@ function calFinish(){
 
 /* ---------------- routing + events ---------------- */
 let VIEW='today';
-const RENDER={today:renderToday,chords:renderChords,scales:renderScales,drills:renderDrills,ear:renderEar,learn:renderLearn};
+const RENDER={today:renderToday,chords:renderChords,scales:renderScales,neck:renderNeck,drills:renderDrills,ear:renderEar,learn:renderLearn};
 function renderView(v){RENDER[v]();}
 function show(v,keepScroll){
   if(!RENDER[v])v='today';
   if(v!==VIEW)stopRun();
   if(v!=='ear')tuneStop();
   VIEW=v;
-  $$('[data-view]').forEach(s=>s.hidden=s.dataset.view!==v);
+  $$('[data-view]').forEach(s=>{const on=s.dataset.view===v;s.hidden=!on;if(!on)s.innerHTML='';});
   $$('nav [data-go]').forEach(b=>b.setAttribute('aria-current',b.dataset.go===v?'page':'false'));
   renderView(v);
   if(location.hash.slice(1)!==v){try{history.replaceState(null,'','#'+v);}catch(e){location.hash=v;}}
@@ -1276,6 +1459,7 @@ function go(v,p){
   p=p||{};
   if(v==='scales'){Object.assign(SC,{whole:false},p);if(p.scale==='chrom'&&p.root==null)SC.root=0;scLoadTempo();if(p.bpm)SC.bpm=p.bpm;}
   if(v==='chords'&&p.chord)CS.sel=p.chord;
+  if(v==='neck'){['panel','note','show','root','q'].forEach(k=>{if(p[k]!=null)NK[k]=p[k];});if(p.root!=null||p.q)NK.shape=0;}
   if(v==='drills'){if(p.panel)DR.panel=p.panel;if(p.a){CH.a=p.a;CH.b=p.b;CH.phase='idle';}if(p.set)RS.set=p.set.slice();if(p.per)RS.per=p.per;if(p.bpm)RS.bpm=p.bpm;}
   if(v==='ear'){if(p.panel)EAR.panel=p.panel;if(p.nfStr){EAR.nfStr=p.nfStr;EAR.nf=null;}}
   show(v);
@@ -1303,8 +1487,14 @@ const SEG={
  ear:v=>{tuneStop();stopRun();EAR.panel=v;renderEar();},
  'tune-rep':v=>{tuneStop();if(v==='1'){if(EAR.tuneS<0)EAR.tuneS=0;tunePlay(EAR.tuneS);EAR.rep=setInterval(()=>tunePlay(EAR.tuneS),2500);}renderEar();},
  'nf-str':v=>{EAR.nfStr=v;EAR.nf=null;renderEar();},
+ 'nk-panel':v=>{stopRun();NK.panel=v;renderNeck();},
+ 'nk-show':v=>{NK.show=v;renderNeckNotes();},
+ 'nk-q':v=>{stopRun();NK.q=v;NK.shape=0;renderNeckChords();},
+ 'fn-mode':v=>{stopRun();FN.mode=v;FN.found=[];renderNeckNotes();},
+ 'wk-per':v=>{stopRun();WK.per=+v;renderNeckChords();},
+ 'wk-listen':v=>{stopRun();WK.listen=v==='1';renderNeckChords();},
  'nf-mode':v=>{if(v==='name')nflStop();EAR.nfMode=v;EAR.nf=null;renderEar();},
- 'ck-mode':v=>{stopRun();CK.mode=v;renderChords();},
+ 'ck-mode':v=>{stopRun();CK.mode=v;renderView(VIEW);},
  'sc-listen':v=>{stopRun();SC.listen=v==='1';renderScales();},
  'rs-listen':v=>{stopRun();RS.listen=v==='1';renderRhythm();},
  'ch-listen':v=>{stopRun();CH.listen=v==='1';CH.phase='idle';renderChanges();},
@@ -1315,7 +1505,8 @@ const SEG={
 document.addEventListener('click',e=>{
   const g=e.target.closest('[data-go]');if(g){toggleSettings(false);go(g.dataset.go);return;}
   const sg=e.target.closest('[data-seg]');if(sg){SEG[sg.dataset.seg]&&SEG[sg.dataset.seg](sg.dataset.v);return;}
-  const nt=e.target.closest('#sc-fb .nt');if(nt){A.init();A.pluck(OPEN[+nt.dataset.s]+(+nt.dataset.f),A.now(),0.6);return;}
+  const nt=e.target.closest('#sc-fb .nt, #nk-map .nt, #nk-ch .nt');if(nt){A.init();A.pluck(OPEN[+nt.dataset.s]+(+nt.dataset.f),A.now(),0.6);return;}
+  const ht=e.target.closest('#nk-fb .hit, #nk-fb .nt');if(ht){if(FN.on&&FN.mode==='tap'){A.init();A.pluck(OPEN[+ht.dataset.s]+(+ht.dataset.f),A.now(),0.5);fnTry(+ht.dataset.s,+ht.dataset.f);}return;}
   const el=e.target.closest('[data-act]');if(!el)return;
   const act=el.dataset.act;
   switch(act){
@@ -1324,9 +1515,12 @@ document.addEventListener('click',e=>{
    case 'open':{const p=todayPlan().find(x=>x.k===el.dataset.k);go(p.go[0],p.go[1]);break;}
    case 'log':{ensureToday();const m=todayPlan().filter(p=>state.today.done[p.k]).reduce((a,p)=>a+p.min,0);if(m){state.days[state.today.d]=Math.max(m,state.days[state.today.d]||0);save();renderToday();}break;}
    case 'chord':stopRun();CS.sel=el.dataset.n;renderChords();A.init();A.strum(chordBy(CS.sel).f,A.now());break;
-   case 'strum':if(CK.on)stopRun();A.init();A.strum(chordBy(CS.sel).f,A.now());break;
-   case 'arp':if(CK.on)stopRun();A.init();A.arp(chordBy(CS.sel).f,A.now());break;
-   case 'ck-start':CK.on?stopRun():ckStart();break;
+   case 'strum':if(CK.on)stopRun();A.init();A.strum(curChord().f,A.now());break;
+   case 'arp':if(CK.on)stopRun();A.init();A.arp(curChord().f,A.now());break;
+   case 'ck-start':CK.on?stopRun():ckStart(curChord());break;
+   case 'nk-shape':stopRun();NK.shape=+el.dataset.i;renderNeckChords();A.init();A.strum(NK.cur.f,A.now());break;
+   case 'fn-start':FN.on?(stopRun(),renderNeckNotes()):fnStart();break;
+   case 'wk-start':WK.on?stopRun():wkStart();break;
    case 'tu-start':TU.on?stopRun():tuStart();break;
    case 'nf-listen':nflStart();break;
    case 'mic':if(Mic.on){stopRun();Mic.stop();}else ensureMic();break;
@@ -1342,7 +1536,7 @@ document.addEventListener('click',e=>{
       if(el.dataset.confirm!=='1'){el.dataset.confirm='1';el.textContent='Tap again to replace this device’s progress';el.classList.add('primary');break;}
       state=merge(DEFAULT(),data);state.updatedAt=0;save();A.apply();renderSettings();renderView(VIEW);$('#load-msg').textContent='Progress loaded.';break;}
    case 'chord-drill':{const n=CS.sel,pairs=[].concat(PAIRS[1],PAIRS[2],PAIRS[3]),p=pairs.find(x=>x.includes(n));go('drills',{panel:'changes',a:n,b:p?(p[0]===n?p[1]:p[0]):(n==='G'?'C':'G')});break;}
-   case 'bpm':{const d=+el.dataset.d;if(el.dataset.t==='sc')scSetBpm(SC.bpm+d);else{RS.bpm=Math.max(40,Math.min(200,RS.bpm+d));Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;$('#rs-range').value=RS.bpm;}break;}
+   case 'bpm':{const d=+el.dataset.d;if(el.dataset.t==='sc')scSetBpm(SC.bpm+d);else if(el.dataset.t==='wk'){WK.bpm=Math.max(40,Math.min(200,WK.bpm+d));if(WK.on)Clock.bpm=WK.bpm;$('#wk-bpm').textContent=WK.bpm;$('#wk-range').value=WK.bpm;}else{RS.bpm=Math.max(40,Math.min(200,RS.bpm+d));Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;$('#rs-range').value=RS.bpm;}break;}
    case 'sc-start':SC.running?scStop():scStart();break;
    case 'sc-next':scNext();break;
    case 'rs-toggle':{stopRun();const n=el.dataset.n,i=RS.set.indexOf(n);if(i>=0){if(RS.set.length>2)RS.set.splice(i,1);}else RS.set.push(n);renderRhythm();break;}
@@ -1375,11 +1569,14 @@ document.addEventListener('change',e=>{
   if(t.id==='sc-root'){stopRun();SC.root=+t.value;scLoadTempo();renderScales();}
   else if(t.id==='sc-scale'){stopRun();SC.scale=t.value;SC.pos=0;scLoadTempo();renderScales();}
   else if(t.id==='sc-pos'){stopRun();SC.pos=+t.value;scLoadTempo();renderScales();}
+  else if(t.id==='nk-note'){stopRun();NK.note=+t.value;FN.found=[];renderNeckNotes();}
+  else if(t.id==='nk-root'){stopRun();NK.root=+t.value;NK.shape=0;renderNeckChords();}
   else if(t.id==='ch-a'||t.id==='ch-b'){stopRun();CH[t.id==='ch-a'?'a':'b']=t.value;CH.phase='idle';renderChanges();}
 });
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='sc-range')scSetBpm(+t.value);
+  else if(t.id==='wk-range'){WK.bpm=+t.value;if(WK.on)Clock.bpm=WK.bpm;$('#wk-bpm').textContent=WK.bpm;}
   else if(t.id==='rs-range'){RS.bpm=+t.value;Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;}
   else if(t.id==='vol'){state.settings.vol=+t.value;if(A.ctx)A.master.gain.value=state.settings.vol;clearTimeout(window._vt);window._vt=setTimeout(save,500);}
 });
