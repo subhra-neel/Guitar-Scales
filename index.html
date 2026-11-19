@@ -220,6 +220,23 @@ input[type=range]{accent-color:var(--brass);width:100%}
 
 /* settings */
 .settings{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.steps .why{color:var(--teal);font-weight:700;font-size:.82rem;margin-top:2px}
+.pbar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}.pbar b{display:block;height:100%;background:var(--ok)}
+.sgrid{display:grid;gap:6px}
+.sgrid>div{border-radius:12px;background:var(--surface-2);padding:10px 0 8px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;transition:background .06s}
+.sgrid b{font:800 1.7rem/1 var(--f-display)}
+.sgrid span{font:700 .78rem var(--f-mono);color:var(--muted)}
+.sgrid .rest b{opacity:.35}
+.sgrid .now{outline:3px solid var(--teal);outline-offset:-3px}
+.sgrid .good{background:var(--ok);color:#fff}.sgrid .late{background:var(--brass);color:var(--on-brass)}.sgrid .wrong{background:var(--bad);color:#fff}
+.sgrid .good span,.sgrid .late span,.sgrid .wrong span{color:inherit}
+#pg-strip .chip[aria-pressed="true"]{background:var(--brass);color:var(--on-brass);border-color:var(--brass)}
+.path{display:flex;flex-direction:column}
+.path>div{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.path>div:first-child{border-top:0}
+.path i{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-style:normal;font-weight:800;font-size:.8rem;color:#fff}
+.path .done i{background:var(--ok);border-color:var(--ok)}
+.path .done p{color:var(--muted)}
 /* listening */
 .fb .nt.late circle{fill:var(--brass)}
 .fb .nt.late text{fill:var(--on-brass)}
@@ -379,7 +396,7 @@ function scaleNames(root,key){if(key==='chrom')return SHARP;const minorish=['min
 
 /* ---------------- state + storage ---------------- */
 const LS='gtr-trainer-v1';
-const DEFAULT=()=>({v:1,updatedAt:0,settings:{tone:'steel',lefty:false,level:1,vol:0.8,sens:'normal',phones:false,latency:80,calibrated:false},days:{},today:{d:'',done:{}},changes:{},ear:{mm:{c:0,t:0},wc:{c:0,t:0},nf:{c:0,t:0}},tempo:{},stats:{runs:[],notes:{},chords:{}},neck:{find:{}}});
+const DEFAULT=()=>({v:1,updatedAt:0,settings:{tone:'steel',lefty:false,level:1,vol:0.8,sens:'normal',phones:false,latency:80,calibrated:false,sessLen:'std'},days:{},today:{d:'',done:{}},changes:{},ear:{mm:{c:0,t:0},wc:{c:0,t:0},nf:{c:0,t:0}},tempo:{},stats:{runs:[],notes:{},chords:{}},neck:{find:{}},miles:{tuned:false},welcomed:false});
 function merge(d,s){for(const k in s){if(s[k]&&typeof s[k]==='object'&&!Array.isArray(s[k])&&d[k]&&typeof d[k]==='object'&&!Array.isArray(d[k]))d[k]=merge(d[k],s[k]);else d[k]=s[k];}return d;}
 function load(){try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s&&s.v===1)return merge(DEFAULT(),s);}catch(e){}return DEFAULT();}
 let state=load();
@@ -448,6 +465,8 @@ const A={ctx:null,cache:new Map(),
  },
  pluck(m,t,vol=0.5){if(!this.ctx)return;const x=this.buf(m),s=this.ctx.createBufferSource();s.buffer=x.b;s.playbackRate.value=x.rate;const g=this.ctx.createGain();g.gain.value=vol;s.connect(g).connect(this.tone);s.start(t);},
  strum(fr,t,up){let ix=[0,1,2,3,4,5].filter(i=>fr[i]>=0);if(up)ix.reverse();ix.forEach((i,k)=>this.pluck(OPEN[i]+fr[i],t+k*0.024,0.34));},
+ strumPart(fr,t,up,vol=1){let ix=[0,1,2,3,4,5].filter(i=>fr[i]>=0);if(up)ix=ix.filter(i=>i>=2).reverse();ix.forEach((i,k)=>this.pluck(OPEN[i]+fr[i],t+k*(up?0.016:0.022),(up?0.22:0.32)*vol));},
+ chuck(t,vol=0.4){if(!this.nb){const n=Math.floor(this.ctx.sampleRate*0.08);this.nb=this.ctx.createBuffer(1,n,this.ctx.sampleRate);const d=this.nb.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(n*0.12));}const s=this.ctx.createBufferSource();s.buffer=this.nb;const g=this.ctx.createGain();g.gain.value=vol;s.connect(g).connect(this.tone);s.start(t);},
  arp(fr,t){[0,1,2,3,4,5].filter(i=>fr[i]>=0).forEach((i,k)=>this.pluck(OPEN[i]+fr[i],t+k*0.3,0.5));},
  click(t,acc){if(!this.ctx)return;const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type='sine';o.frequency.value=acc?3150:2600;
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(acc?0.55:0.32,t+0.002);g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);o.connect(g).connect(this.master);o.start(t);o.stop(t+0.07);}
@@ -623,23 +642,97 @@ function beatsHTML(n,id){return `<div class="beats" id="${id}">${Array.from({len
 function lightBeat(id,i){$$(`#${id} i`).forEach((e,j)=>e.classList.toggle('on',j===i));}
 
 /* ---------------- TODAY ---------------- */
+const TARGET={1:30,2:40,3:30};
+const allPairs=()=>[].concat(...[1,2,3].filter(l=>l<=state.settings.level).map(l=>PAIRS[l]));
+const bestOf=p=>(state.changes[pairKey(p[0],p[1])]||[]).reduce((m,x)=>Math.max(m,x.s),0);
+function pickPair(){
+  const ps=allPairs(),dn=dayNum(),tgt=TARGET[state.settings.level],tried=ps.filter(bestOf),fresh=ps.filter(p=>!bestOf(p)),weak=tried.filter(p=>bestOf(p)<tgt).sort((a,b)=>bestOf(a)-bestOf(b));
+  if(weak.length&&(dn%2===0||!fresh.length))return {p:weak[0],why:`Your weakest pair so far: best ${bestOf(weak[0])} a minute, target ${tgt}.`};
+  if(fresh.length)return {p:fresh[dn%fresh.length],why:'A pair you haven’t scored yet.'};
+  const all=ps.slice().sort((a,b)=>bestOf(a)-bestOf(b));return {p:all[0],why:`Every pair is above ${tgt}. Pushing your lowest one, best ${bestOf(all[0])}.`};
+}
+function pickChord(){
+  const ch=levelChords(),dn=dayNum(),st=state.stats.chords;
+  const weak=ch.filter(c=>st[c.n]&&st[c.n].t>=2&&st[c.n].ok/st[c.n].t<0.75).sort((a,b)=>st[a.n].ok/st[a.n].t-st[b.n].ok/st[b.n].t);
+  if(weak.length){const r=st[weak[0].n];return {c:weak[0],why:`Clean in only ${r.ok} of ${r.t} checks so far.`};}
+  const fresh=ch.filter(c=>!st[c.n]);if(fresh.length)return {c:fresh[dn%fresh.length],why:'A shape you haven’t checked yet.'};
+  return {c:ch[dn%ch.length],why:'Keeping it fresh.'};
+}
+function pickNote(){
+  const f=state.neck.find,slow=Object.entries(f).filter(([n,r])=>r.best&&r.best>20).sort((a,b)=>b[1].best-a[1].best)[0];
+  if(slow)return {n:+slow[0],why:`Your slowest note: best ${slow[1].best.toFixed(1)} s.`};
+  return {n:noteOfDay(),why:''};
+}
+function pickStrum(){
+  const ids={1:['downs','du','folk'],2:['folk','rock','off','waltz'],3:['folk','rock','off','waltz','du']}[state.settings.level];
+  const passed=id=>state.stats.runs.some(r=>r.kind==='strum'&&r.acc>=85&&r.name==='Strum: '+patBy(id).name);
+  const next=ids.find(id=>!passed(id));return next?{id:next,why:'Next pattern to get above 85%.'}:{id:ids[dayNum()%ids.length],why:'All patterns passed. Rotating to keep them sharp.'};
+}
+function pickProg(){
+  const lv=state.settings.level,dn=dayNum(),mk={1:[7,0],2:[7,0,9,2],3:[7,0,9,2,4,5]}[lv],nk={1:[4],2:[4,9],3:[4,9,2]}[lv];
+  const opts=[];PROGS.forEach(P=>(P.mode==='maj'?mk:nk).forEach(k=>{if(bestCapo(P,k))opts.push({P,k});}));
+  const o=opts[dn%opts.length];const r=bestCapo(o.P,o.k);return {...o,capo:r.capo};
+}
 function todayPlan(){
-  const lv=state.settings.level,dn=dayNum(),ch=levelChords();
-  const cod=ch[dn%ch.length];
-  const pairs=[].concat(...[1,2,3].filter(l=>l<=lv).map(l=>PAIRS[l]));const pair=pairs[dn%pairs.length];
-  const sets=SETS[lv];const set=sets[dn%sets.length];
+  const lv=state.settings.level,dn=dayNum();
+  const {c:cod,why:whyC}=pickChord(),{p:pair,why:whyP}=pickPair(),{n:nod,why:whyN}=pickNote(),{id:pat,why:whyS}=pickStrum(),pg=pickProg();
   const ws=WEEK_SCALES[lv];const sw=ws[Math.floor(dn/7)%ws.length];
   const swName=`${KEYS[sw.root]} ${SCALES[sw.scale].name.toLowerCase()}${sw.pos?`, position ${sw.pos+1}`:''}`;
-  return [
-   {k:'tune',min:2,t:'Tune up',d:'Tune by ear to the reference tones, then check yourself with the live tuner.',go:['ear',{panel:'tuner'}]},
-   {k:'spider',min:3,t:'Spider warm-up',d:'One finger per fret, frets 1 to 4 on every string, at 60 bpm.',go:['scales',{scale:'chrom',pos:0}]},
-   {k:'neck',min:2,t:`Note of the day: every ${BOTH[noteOfDay()]}`,d:'Find it on all six strings, low E to high e, against the clock. Beat yesterday’s time.',go:['neck',{panel:'notes',note:noteOfDay()}]},
-   {k:'cod',min:2,t:`Chord of the day: ${label(cod.n)}`,d:'Place the shape and run Check my chord, string by string. Fix any red string, then land it five times.',go:['chords',{chord:cod.n}]},
-   {k:'changes',min:3,t:`One-minute changes: ${label(pair[0])} ↔ ${label(pair[1])}`,d:'Count clean changes in 60 seconds, by tapping or by letting the app listen. Beat yesterday by one.',go:['drills',{panel:'changes',a:pair[0],b:pair[1]}]},
-   {k:'rhythm',min:3,t:`Rhythm switch: ${set.map(label).join(' · ')}`,d:'Four beats per chord at 60 bpm. Keep the strumming hand moving through the change.',go:['drills',{panel:'rhythm',set,per:4,bpm:60}]},
-   {k:'scale',min:4,t:`Scale of the week: ${swName}`,d:'Play-along with Listen & grade on. Above 90%, add 5 bpm.',go:['scales',{root:sw.root,scale:sw.scale,pos:sw.pos}]},
-   {k:'ear',min:2,t:'Ear check',d:'Ten rounds of major or minor. Say the answer out loud before you tap.',go:['ear',{panel:'mm'}]},
-  ];
+  const sets=SETS[lv];const set=sets[dn%sets.length];
+  const S={
+   tune:{k:'tune',min:2,t:'Tune up',d:'Tune by ear to the reference tones, then check yourself with the live tuner.',go:['ear',{panel:'tuner'}]},
+   spider:{k:'spider',min:3,t:'Spider warm-up',d:'One finger per fret, frets 1 to 4 on every string, at 60 bpm.',go:['scales',{scale:'chrom',pos:0}]},
+   neck:{k:'neck',min:2,t:`Note of the day: every ${BOTH[nod]}`,d:'Find it on all six strings, low E to high e, against the clock. Beat your last time.',why:whyN,go:['neck',{panel:'notes',note:nod}]},
+   cod:{k:'cod',min:2,t:`Chord of the day: ${label(cod.n)}`,d:'Run Check my chord, string by string. Fix any red string, then land the shape five times.',why:whyC,go:['chords',{chord:cod.n}]},
+   changes:{k:'changes',min:3,t:`One-minute changes: ${label(pair[0])} ↔ ${label(pair[1])}`,d:'Count clean changes in 60 seconds, by tapping or by letting the app listen. Beat your best by one.',why:whyP,go:['drills',{panel:'changes',a:pair[0],b:pair[1]}]},
+   strum:{k:'strum',min:3,t:`Strumming: ${patBy(pat).name}`,d:'Listen to it once, then play it muted with Listen & grade on. Add the chord at 85%.',why:whyS,go:['drills',{panel:'strum',pat}]},
+   prog:{k:'prog',min:4,t:`Progression: ${pg.P.name} in ${KEYS[pg.k]}${pg.P.mode==='min'?' minor':''}`,d:`${pg.capo?`Capo ${pg.capo}. `:''}One bar per chord. Keep strumming through every change.`,go:['drills',{panel:'prog',prog:pg.P.id,key:pg.k}]},
+   scale:{k:'scale',min:4,t:`Scale of the week: ${swName}`,d:'Play-along with Listen & grade on. Above 90%, add 5 bpm.',go:['scales',{root:sw.root,scale:sw.scale,pos:sw.pos}]},
+   walk:{k:'walk',min:3,t:'Walk C across the neck',d:'All five CAGED shapes, 8 beats each. Say each shape’s name as you move.',go:['neck',{panel:'chords',root:0,q:'maj'}]},
+   rhythm:{k:'rhythm',min:3,t:`Rhythm switch: ${set.map(label).join(' · ')}`,d:'Four beats per chord at 60 bpm. Keep the strumming hand moving through the change.',go:['drills',{panel:'rhythm',set,per:4,bpm:60}]},
+   ear:{k:'ear',min:2,t:'Ear check',d:'Ten rounds of major or minor. Say the answer out loud before you tap.',go:['ear',{panel:'mm'}]},
+  };
+  const order={short:['tune','cod','changes','strum'],std:['tune','spider','neck','cod','changes','strum','prog','scale','ear'],long:['tune','spider','neck','cod','changes','strum','prog','rhythm','scale','walk','ear']}[state.settings.sessLen||'std'];
+  return order.map(k=>S[k]);
+}
+function milestones(){
+  const lv=state.settings.level,st=state.stats,find=state.neck.find;
+  const clean=g=>CHORDS.filter(c=>c.g===g&&st.chords[c.n]&&st.chords[c.n].ok>0);
+  const pairsAt=(lvls,min)=>[].concat(...lvls.map(l=>PAIRS[l])).filter(p=>bestOf(p)>=min);
+  const run=(kind,acc,test)=>st.runs.some(r=>r.kind===kind&&r.acc>=acc&&(!test||test(r)));
+  const notesUnder=(set,secs)=>set.filter(n=>find[n]&&find[n].best&&find[n].best<secs);
+  const firstMissing=(set,secs)=>set.find(n=>!(find[n]&&find[n].best&&find[n].best<secs));
+  const nat=[0,2,4,5,7,9,11],all=[0,1,2,3,4,5,6,7,8,9,10,11];
+  if(lv===1){const c1=clean(1),p1=pairsAt([1],30),n1=notesUnder(nat,20);return {next:2,items:[
+    {t:'Tune all six strings until the live tuner marks each one in tune',done:!!state.miles.tuned,go:['ear',{panel:'tuner'}]},
+    {t:`Pass Check my chord on 6 of the 8 open chords (${c1.length}/6)`,done:c1.length>=6,go:['chords',{chord:(CHORDS.find(c=>c.g===1&&!c1.includes(c))||CHORDS[0]).n}]},
+    {t:`30 clean changes a minute on 3 pairs (${Math.min(3,p1.length)}/3)`,done:p1.length>=3,go:['drills',{panel:'changes',a:pickPair().p[0],b:pickPair().p[1]}]},
+    {t:'Strum the folk pattern at 85% or better',done:run('strum',85,r=>/Folk/.test(r.name)),go:['drills',{panel:'strum',pat:'folk'}]},
+    {t:'A minor pentatonic, position 1, at 90% or better',done:run('scale',90,r=>r.name==='A minor pentatonic, position 1'),go:['scales',{root:9,scale:'minpent',pos:0}]},
+    {t:`Find every natural note in under 20 s (${n1.length}/7)`,done:n1.length>=7,go:['neck',{panel:'notes',note:firstMissing(nat,20)??0}]}]};}
+  if(lv===2){const c2=clean(2),p2=pairsAt([1,2],40),n2=notesUnder(all,15);return {next:3,items:[
+    {t:`Pass Check my chord on 8 sevenths, sus or colour chords (${Math.min(8,c2.length)}/8)`,done:c2.length>=8,go:['chords',{chord:(CHORDS.find(c=>c.g===2&&!c2.includes(c))||CHORDS[8]).n}]},
+    {t:`40 clean changes a minute on 3 pairs (${Math.min(3,p2.length)}/3)`,done:p2.length>=3,go:['drills',{panel:'changes',a:pickPair().p[0],b:pickPair().p[1]}]},
+    {t:'Play a full 12-bar blues at 85% or better',done:run('prog',85,r=>/12-bar/.test(r.name)),go:['drills',{panel:'prog',prog:'blues',key:9}]},
+    {t:'Strum driving eighths and offbeat chops at 85%',done:run('strum',85,r=>/Driving/.test(r.name))&&run('strum',85,r=>/Offbeat/.test(r.name)),go:['drills',{panel:'strum',pat:'rock'}]},
+    {t:'Walk C major across the neck at 80% or better',done:run('walk',80,r=>/^C across/.test(r.name)),go:['neck',{panel:'chords',root:0,q:'maj'}]},
+    {t:`Find all 12 notes in under 15 s (${n2.length}/12)`,done:n2.length>=12,go:['neck',{panel:'notes',note:firstMissing(all,15)??0}]}]};}
+  const c3=clean(3),p3=pairsAt([3],30),pos=new Set(st.runs.filter(r=>r.kind==='scale'&&r.acc>=90&&/minor pentatonic, position/.test(r.name)).map(r=>r.name.split('position ')[1])),walks=new Set(st.runs.filter(r=>r.kind==='walk'&&r.acc>=85).map(r=>r.name));
+  return {next:null,items:[
+    {t:`Pass Check my chord on 6 barre chords (${Math.min(6,c3.length)}/6)`,done:c3.length>=6,go:['chords',{chord:(CHORDS.find(c=>c.g===3&&!c3.includes(c))||CHORDS[23]).n}]},
+    {t:`30 clean changes a minute on 3 barre-chord pairs (${Math.min(3,p3.length)}/3)`,done:p3.length>=3,go:['drills',{panel:'changes',a:'F',b:'C'}]},
+    {t:`Minor pentatonic positions 1 to 3 at 90% (${Math.min(3,pos.size)}/3)`,done:pos.size>=3,go:['scales',{root:9,scale:'minpent',pos:Math.min(2,pos.size)}]},
+    {t:`Walk 3 different chords across the neck at 85% (${Math.min(3,walks.size)}/3)`,done:walks.size>=3,go:['neck',{panel:'chords',root:7,q:'maj'}]},
+    {t:'Play a progression that needs a capo at 85% or better',done:run('prog',85,r=>/capo/.test(r.name)),go:['drills',{panel:'prog',prog:'pop',key:9}]}]};
+}
+function pathCard(compact){
+  const m=milestones(),done=m.items.filter(i=>i.done).length,lv=state.settings.level;
+  if(compact)return `<div class="card stack"><div class="row" style="justify-content:space-between"><h2>Your path</h2><button class="btn" data-go="learn">See milestones</button></div>
+    <p class="muted">${done} of ${m.items.length} milestones ${m.next?`toward level ${m.next}`:'in level 3'} done.</p><div class="pbar"><b style="width:${Math.round(100*done/m.items.length)}%"></b></div></div>`;
+  return `<div class="card stack"><div class="row" style="justify-content:space-between"><h2>Your path ${m.next?`to level ${m.next}`:'through level 3'}</h2><span class="score">${done} / ${m.items.length}</span></div>
+    <p class="note">Milestones tick themselves off when the app hears you reach them. Do them in any order.</p>
+    <div class="path">${m.items.map((it,i)=>`<div class="${it.done?'done':''}"><i>${it.done?'✓':''}</i><p>${it.t}</p>${it.done?'<span></span>':`<button class="btn" data-act="mile" data-i="${i}">Go</button>`}</div>`).join('')}</div>
+    ${done===m.items.length&&m.next?`<button class="btn primary big" data-act="level-up" data-l="${m.next}">Move up to level ${m.next}</button>`:''}</div>`;
 }
 function renderToday(){
   ensureToday();
@@ -659,16 +752,22 @@ function renderToday(){
       <div class="stat"><b class="mono">${weekMinutes()}</b><span>min this week</span></div>
     </div>
   </div>
+  <div class="row">${seg('sess-len',[['short','Short · 10 min'],['std','Standard'],['long','Long']],state.settings.sessLen||'std','Session length')}</div>
+  ${state.welcomed?'':`<div class="card stack" style="border-color:var(--teal);border-width:2px">
+    <h2>Welcome. Four steps to get going</h2>
+    <ol style="margin:0;padding-left:1.2em;gap:6px" class="stack"><li>Open Settings and pick your guitar (steel or nylon) and level. New to guitar? Level 1.</li><li>Tune up with the live tuner on the Ear tab.</li><li>Run Settings → Calibrate timing, so the app judges early and late fairly.</li><li>Work down today’s list from the top. Tick each step, then log the session. Ten minutes a day beats an hour on Sunday.</li></ol>
+    <div class="row"><button class="btn" data-act="settings">Open settings</button><button class="btn" data-act="go-tuner">Open the tuner</button><button class="btn primary" data-act="welcomed">Got it</button></div></div>`}
   <div class="card"><div class="days" aria-label="Last 14 days">${strip.join('')}</div><p class="note" style="margin-top:8px">Last 14 days. A filled square is a logged session.</p></div>
   <div class="cols">
     <div class="card">
       <ol class="steps">${plan.map(p=>`
         <li><button class="check" data-act="check" data-k="${p.k}" aria-pressed="${!!done[p.k]}" aria-label="Mark ${p.t} done"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></button>
-        <div style="min-width:0"><h3>${p.t}<small>${p.min} min</small></h3><p>${p.d}</p></div>
+        <div style="min-width:0"><h3>${p.t}<small>${p.min} min</small></h3><p>${p.d}</p>${p.why?`<p class="why">${p.why}</p>`:''}</div>
         <button class="btn" data-act="open" data-k="${p.k}">Open</button></li>`).join('')}</ol>
     </div>
     <div class="stack">
       ${insightsHTML()}
+      ${pathCard(true)}
       <div class="card stack">
         <h2>Log the session</h2>
         <p class="muted">${doneMin?`${doneMin} of ${total} minutes ticked off.`:'Tick off steps as you finish them.'}${logged?` Logged today: <b>${logged} min</b>.`:''}</p>
@@ -676,9 +775,10 @@ function renderToday(){
       </div>
       <div class="card stack">
         <span class="eyebrow">How the session is built</span>
-        <p>Like a gym routine: warm up the hands, lift one new weight (the chord of the day), drill the movement that’s hard (changes), then put it in context with rhythm, scales and ears. Every part changes daily, the scale changes weekly.</p>
-        <p class="note">Change the difficulty in Settings. Level 1 covers open chords, level 2 adds sevenths and sus chords, level 3 adds barre chords.</p>
+        <p>Like a gym routine: warm up the hands, lift one new weight (the chord of the day), drill the movement that’s hard (changes), then put it in context with strumming, a progression, scales and ears.</p>
+        <p class="note">The plan watches your results. Lines in teal say why an item was picked: your weakest pair, a chord that keeps failing its check, your slowest note. Short sessions keep the four most important steps.</p>
       </div>
+      <div class="card stack" id="rec-card">${recHTML()}</div>
     </div>
   </div>`;
 }
@@ -1119,11 +1219,158 @@ const RL={on:false,exp:[],st:null,unsub:null,
 };
 function renderDrills(){
   $('#v-drills').innerHTML=`
-  <div><span class="eyebrow">Drills</span><h1>${DR.panel==='rhythm'?'Rhythm switch':'One-minute changes'}</h1></div>
-  ${seg('drill',[['rhythm','Rhythm switch'],['changes','One-minute changes']],DR.panel,'Drill')}
+  <div><span class="eyebrow">Drills</span><h1>${{rhythm:'Rhythm switch',strum:'Strumming patterns',prog:'Progressions',changes:'One-minute changes'}[DR.panel]}</h1></div>
+  ${seg('drill',[['strum','Strumming'],['prog','Progressions'],['rhythm','Rhythm switch'],['changes','One-minute changes']],DR.panel,'Drill')}
   <div id="drill-body"></div>`;
-  DR.panel==='rhythm'?renderRhythm():renderChanges();
+  ({rhythm:renderRhythm,strum:renderStrum,prog:renderProg,changes:renderChanges})[DR.panel]();
 }
+
+/* strumming */
+const PATTERNS=[
+ {id:'downs',name:'Downs on the beat',beats:4,g:'D.D.D.D.',tip:'One down strum per beat. Your hand still comes back up between them, just above the strings.'},
+ {id:'du',name:'Down-ups',beats:4,g:'DUDUDUDU',tip:'Down on the numbers, up on the “ands”. Keep the upstroke light; it only needs the top three or four strings.'},
+ {id:'folk',name:'Folk: D, DU, UDU',beats:4,g:'D.DU.UDU',tip:'The workhorse of acoustic pop. On “3” the hand still swings down but misses the strings, then catches the up on “and”.'},
+ {id:'rock',name:'Driving eighths',beats:4,g:'DDDDDDDD',tip:'All downstrokes, two per beat. Keep the wrist loose and lean a little harder on beats 2 and 4.'},
+ {id:'off',name:'Offbeat chops',beats:4,g:'.U.U.U.U',tip:'Only the “ands”, with short upstrokes. Ease the fretting-hand pressure right after each one so the chord chops off.'},
+ {id:'waltz',name:'Waltz (3/4)',beats:3,g:'D.DUDU',tip:'Three beats to a bar: a strong down on 1, lighter down-ups after. Count “1 and 2 and 3 and”.'},
+];
+const ST={pat:'folk',chord:'G',bpm:70,listen:false,on:false,unsub:null,exp:[],st:null};
+const patBy=id=>PATTERNS.find(p=>p.id===id)||PATTERNS[2];
+function renderStrum(){
+  const P=patBy(ST.pat),n=P.g.length,cnt=P.beats===3?['1','&','2','&','3','&']:['1','&','2','&','3','&','4','&'];
+  const pool=levelChords();if(ST.chord!=='x'&&!pool.some(c=>c.n===ST.chord))ST.chord=pool[0].n;
+  $('#drill-body').innerHTML=`
+  <div class="cols">
+    <div class="card stack">
+      <div class="row" style="justify-content:space-between"><h2>${P.name}</h2><span class="score">${P.beats}/4 · ${ST.chord==='x'?'muted strings':label(ST.chord)}</span></div>
+      <div class="sgrid" style="grid-template-columns:repeat(${n},1fr)">${[...P.g].map((ch,i)=>`<div id="sg-${i}" class="${ch==='.'?'rest':''}"><b>${ch==='D'?'↓':ch==='U'?'↑':'·'}</b><span>${cnt[i]}</span></div>`).join('')}</div>
+      <p>${P.tip}</p>
+      ${ST.listen?`<div id="st-grade"><p class="note">Each strum is graded: green on time, gold early or late, red missed. A strum on a rest counts as extra.${calHint()}</p></div>`:''}
+      <button class="btn primary big" data-act="st-start" id="st-btn">Start</button>
+    </div>
+    <div class="card stack">
+      <div class="field"><span>Pattern</span><div class="chipset">${PATTERNS.map(p=>`<button class="chip" data-act="st-pat" data-id="${p.id}" aria-pressed="${p.id===P.id}">${p.name}</button>`).join('')}</div></div>
+      <label class="field"><span>Chord to strum</span><select id="st-chord"><option value="x"${ST.chord==='x'?' selected':''}>Muted strings (rhythm only)</option>${pool.map(c=>`<option value="${c.n}"${c.n===ST.chord?' selected':''}>${label(c.n)}</option>`).join('')}</select></label>
+      <div class="field"><span>Tempo</span>${tempoCtl('st',ST.bpm)}</div>
+      <div class="field"><span>Listen to my playing</span>${seg('st-listen',[['0','Off: play along'],['1','Listen & grade']],ST.listen?'1':'0','Listen')}</div>
+      <p class="note">${ST.listen?listenNote():'The app strums the pattern for you so you can hear it first. Then switch on listening and play it yourself.'}</p>
+      <div class="callout"><p class="note"><b>Hands-on:</b> rest the fretting hand lightly across the strings and strum muted first, so all your attention is on the rhythm. Add the chord once you get 85% or more.</p></div>
+    </div>
+  </div>`;
+}
+function stCell(i,cls){const el=$('#sg-'+i);if(!el)return;el.classList.remove('good','late','wrong');if(cls){el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),Math.max(180,60/ST.bpm/2*900));}}
+function stCursor(i){$$('.sgrid > div.now').forEach(e=>e.classList.remove('now'));if(i>=0){const el=$('#sg-'+i);if(el)el.classList.add('now');}}
+function stPaint(final){const el=$('#st-grade');if(!el||!ST.st)return;const s=ST.st,tot=s.perfect+s.good+s.miss,acc=tot?Math.round(100*(s.perfect+s.good)/(tot+s.extra)):0,off=s.offs.length?Math.round(1000*s.offs.reduce((a,b)=>a+b,0)/s.offs.length):null;
+  el.innerHTML=`<div class="tally"><div class="g"><b>${s.perfect}</b><span>On time</span></div><div class="l"><b>${s.good}</b><span>Early/late</span></div><div class="m"><b>${s.miss+s.extra}</b><span>Missed/extra</span></div><div><b>${tot?acc+'%':'–'}</b><span>Accuracy</span></div></div>
+  <p class="note" style="margin-top:8px">${off!=null?'Timing: '+timingText(off):'Waiting for your first strum.'}${s.extra?` ${s.extra} extra strum${s.extra>1?'s':''} on rests: keep the hand moving but miss the strings there.`:''}${final&&tot>=8?` <b>${acc>=85?'Steady. Add 5 bpm or try the next pattern.':'Drop 5 bpm, or strum muted until it locks in.'}</b>`:''}</p>`;
+  return {tot,acc,off};}
+async function stStart(){
+  if(ST.listen&&!await ensureMic())return;
+  const P=patBy(ST.pat),n=P.g.length,guide=guideOK(ST.listen),fr=ST.chord==='x'?null:chordBy(ST.chord).f,slot=60/ST.bpm/2,win=Math.min(0.11,slot*0.45);
+  claimRun(stStop);ST.on=true;ST.exp=[];ST.rests=[];ST.st={perfect:0,good:0,miss:0,extra:0,offs:[]};
+  const b=$('#st-btn');b.textContent='Stop';b.classList.remove('primary');
+  if(ST.listen)ST.unsub=Mic.sub(ev=>{if(ev.type!=='onset')return;
+    const c=ST.exp.filter(e=>!e.done&&Math.abs(ev.t-e.t)<=win).sort((a,b)=>Math.abs(ev.t-a.t)-Math.abs(ev.t-b.t))[0];
+    if(c){c.done=true;const off=ev.t-c.t;ST.st.offs.push(off);if(Math.abs(off)<=0.05){ST.st.perfect++;stCell(c.i,'good');}else{ST.st.good++;stCell(c.i,'late');}}
+    else{const r=ST.rests.find(r=>!r.hit&&Math.abs(ev.t-r.t)<=win);if(r){r.hit=true;ST.st.extra++;stCell(r.i,'wrong');}}
+    stPaint();});
+  Clock.start(ST.bpm,2,(k,t)=>{
+    if(k%2===0)A.click(t,(k/2)%P.beats===0);
+    if(ST.listen){const now=A.ctx.currentTime-(state.settings.latency||0)/1000;for(const e of ST.exp){if(!e.done&&now-e.t>win+0.15){e.done=true;ST.st.miss++;stCell(e.i,'wrong');stPaint();}}ST.exp=ST.exp.filter(e=>!e.done||now-e.t<1);ST.rests=ST.rests.filter(r=>now-r.t<1);}
+    if(k<2*P.beats){if(k%2===0)at(t,()=>{stCursor(-1);const g=$('#st-grade');if(g&&!ST.st.offs.length&&!ST.st.miss)g.querySelector('.note')&&(g.querySelector('.note').textContent=`Count-in ${P.beats-k/2}`);});return;}
+    const i=(k-2*P.beats)%n,ch=P.g[i];
+    if(ch!=='.'){if(guide){if(fr)A.strumPart(fr,t,ch==='U');else A.chuck(t,ch==='U'?0.25:0.4);}if(ST.listen)ST.exp.push({t,i,done:false});}
+    else if(ST.listen)ST.rests.push({t,i,hit:false});
+    at(t,()=>stCursor(i));
+  });
+}
+function stStop(){Clock.stop();if(ST.unsub)ST.unsub();ST.unsub=null;const was=ST.on;ST.on=false;releaseRun(stStop);const b=$('#st-btn');if(b){b.textContent='Start';b.classList.add('primary');}stCursor(-1);
+  if(was&&ST.listen&&ST.st){const r=stPaint(true);if(r&&r.tot>=8){pushRun({d:dkey(),kind:'strum',name:'Strum: '+patBy(ST.pat).name,acc:r.acc,off:r.off,n:r.tot,bpm:ST.bpm});save();}}}
+
+/* progressions with automatic capo */
+const PROGS=[
+ {id:'pop',name:'Pop four',form:'I–V–vi–IV',mode:'maj',deg:['I','V','vi','IV'],tip:'Home, away, a sad turn, then the road back. Thousands of pop songs are built on these four chords.'},
+ {id:'fifties',name:'Fifties',form:'I–vi–IV–V',mode:'maj',deg:['I','vi','IV','V'],tip:'The doo-wop progression. The V at the end pulls you straight back to the start.'},
+ {id:'three',name:'Three-chord',form:'I–IV–V–I',mode:'maj',deg:['I','IV','V','I'],tip:'Folk, country and early rock’n’roll in four bars.'},
+ {id:'blues',name:'12-bar blues',form:'I I I I · IV IV I I · V IV I V',mode:'maj',seventh:true,deg:['I','I','I','I','IV','IV','I','I','V','IV','I','V'],tip:'Twelve bars, three chords: the backbone of blues and rock. From level 2 it uses seventh chords for the bluesy sound.'},
+ {id:'minor',name:'Minor anthem',form:'i–VI–III–VII',mode:'min',deg:['i','VI','III','VII'],tip:'The minor cousin of the pop four: moody, then lifting.'},
+ {id:'andal',name:'Andalusian',form:'i–VII–VI–V',mode:'min',deg:['i','VII','VI','V'],tip:'A staircase walking down to a dramatic major V. Flamenco’s favourite move.'},
+];
+const DEG={maj:{I:[0,''],ii:[2,'m'],iii:[4,'m'],IV:[5,''],V:[7,''],vi:[9,'m']},min:{i:[0,'m'],iv:[5,'m'],V:[7,''],III:[3,''],VI:[8,''],VII:[10,'']}};
+const PG={prog:'pop',key:7,bpm:70,listen:false,on:false,unsub:null,exp:[],st:null};
+function progNames(P,S){
+  const lv=state.settings.level,have=new Set(levelChords().map(c=>c.n)),names=[];let pen=0;
+  for(const d of P.deg){const [off,q]=DEG[P.mode][d];let n=ASCII[pc(S+off)]+q;
+    if((P.seventh||(P.mode==='min'&&d==='V'))&&q===''&&lv>=2){if(have.has(n+'7'))n+='7';else if(P.seventh)pen+=2;}
+    if(n==='F'&&!have.has('F')&&have.has('Fmaj7')){n='Fmaj7';pen+=3;}
+    if(!have.has(n))return null;names.push(n);}
+  return {names,pen};
+}
+function bestCapo(P,key){
+  const pref=P.mode==='maj'?[7,0,2,9,4]:[4,9,2];let best=null;
+  for(let S=0;S<12;S++){const capo=pc(key-S);if(capo>7)continue;const r=progNames(P,S);if(!r)continue;
+    const score=capo+r.pen+(pref.includes(S)?pref.indexOf(S)*0.1:1);if(!best||score<best.score)best={S,capo,names:r.names,score};}
+  return best;
+}
+const progBy=id=>PROGS.find(p=>p.id===id)||PROGS[0];
+function renderProg(){
+  const P=progBy(PG.prog),r=bestCapo(P,PG.key),keyName=`${KEYS[PG.key]}${P.mode==='min'?' minor':' major'}`;
+  const uniq=r?[...new Set(r.names)]:[];
+  $('#drill-body').innerHTML=`
+  <div class="cols">
+    <div class="card stack">
+      <div class="row" style="justify-content:space-between"><h2>${P.name} in ${keyName}</h2><span class="score mono">${P.form}</span></div>
+      ${r?`<p class="callout"><b>${r.capo?`Capo on fret ${r.capo}`:'No capo'}</b>, then play these shapes: ${uniq.map(label).join(' · ')}. ${r.capo?`The capo raises everything ${r.capo} fret${r.capo>1?'s':''}, so the shapes you know come out in ${KEYS[PG.key]}.`:''}</p>
+      <div class="chipset" id="pg-strip">${r.names.map((n,i)=>`<span class="chip" data-i="${i}" style="display:inline-flex;align-items:center">${label(n)}</span>`).join('')}</div>
+      <div class="rs-stage">
+        <div class="rs-now"><span class="eyebrow">Play</span><div id="pg-now-svg" style="max-width:190px">${chordSVG(chordBy(r.names[0]))}</div><div class="cname" id="pg-now-name">${label(r.names[0])}</div></div>
+        <div class="rs-next" id="pg-next"><span class="eyebrow">Next</span><div id="pg-next-svg" style="max-width:110px">${chordSVG(chordBy(r.names[1%r.names.length]))}</div><div class="cname" id="pg-next-name">${label(r.names[1%r.names.length])}</div></div>
+      </div>
+      <div class="readout">${beatsHTML(4,'pg-beats')}<span class="score" id="pg-info">One bar per chord, after a bar of count-in.</span></div>
+      ${PG.listen?`<div class="fbchips" id="pg-fb"></div><p class="note" id="pg-sum">${listenNote()}${calHint()}</p>`:''}
+      <button class="btn primary big" data-act="pg-start" id="pg-btn">Start</button>`
+      :`<p>This progression needs chords from a higher level in every key. Try another progression, or move up a level in Settings.</p>`}
+    </div>
+    <div class="card stack">
+      <div class="field"><span>Progression</span><div class="chipset">${PROGS.map(p=>`<button class="chip" data-act="pg-prog" data-id="${p.id}" aria-pressed="${p.id===P.id}">${p.name}</button>`).join('')}</div></div>
+      <p>${P.tip}</p>
+      <label class="field"><span>Key the song is in</span><select id="pg-key">${KEYS.map((k,i)=>`<option value="${i}"${i===PG.key?' selected':''}>${k}${P.mode==='min'?' minor':' major'}</option>`).join('')}</select></label>
+      <div class="field"><span>Tempo</span>${tempoCtl('pg',PG.bpm)}</div>
+      <div class="field"><span>Listen to my playing</span>${seg('pg-listen',[['0','Off'],['1','Listen & check']],PG.listen?'1':'0','Listen')}</div>
+      <div class="callout"><p class="note"><b>Roman numerals are job titles, not chord names.</b> I is home, IV is visiting a neighbour, V is the road home. Change the key and the jobs stay the same; only the chord names change. That’s how one progression fits thousands of songs.</p></div>
+    </div>
+  </div>`;
+}
+function pgShow(items,bar){const it=items[bar%items.length],nx=items[(bar+1)%items.length];$('#pg-now-svg').innerHTML=chordSVG(it.shape);$('#pg-now-name').textContent=label(it.shape.n);$('#pg-next-svg').innerHTML=chordSVG(nx.shape);$('#pg-next-name').textContent=label(nx.shape.n);
+  $$('#pg-strip .chip').forEach((c,i)=>c.setAttribute('aria-pressed',String(i===bar%items.length)));const inf=$('#pg-info');if(inf)inf.textContent=`Bar ${bar%items.length+1} of ${items.length}`;}
+function pgChip(t,c){const el=$('#pg-fb');if(!el)return;const s=document.createElement('span');s.className=c;s.textContent=t;el.prepend(s);while(el.children.length>5)el.lastChild.remove();}
+function pgSum(final){const el=$('#pg-sum');if(!el||!PG.st||!PG.st.n)return;const s=PG.st;el.textContent=`${s.n} changes: ${s.right} right chord, ${s.good} of those on time${s.miss?`, ${s.miss} not heard`:''}.${final?(s.good>=s.n*0.85?' Solid. Try another key, or add 5 bpm.':' Keep this tempo and glance at Next one beat early.'):''}`;}
+async function pgStart(){
+  const P=progBy(PG.prog),r=bestCapo(P,PG.key);if(!r)return;
+  if(PG.listen&&!await ensureMic())return;
+  const items=r.names.map(n=>{const c=chordBy(n);return {shape:c,snd:{n:c.n,f:c.f.map(x=>x<0?-1:x+r.capo)}};}),guide=guideOK(PG.listen);
+  claimRun(pgStop);PG.on=true;PG.exp=[];PG.st={n:0,good:0,right:0,miss:0,offs:[]};PG.runName=`${P.name} in ${KEYS[PG.key]}${P.mode==='min'?'m':''}${r.capo?`, capo ${r.capo}`:''}`;
+  const b=$('#pg-btn');b.textContent='Stop';b.classList.remove('primary');const fb=$('#pg-fb');if(fb)fb.innerHTML='';
+  const others=[...new Set(r.names)];
+  if(PG.listen)PG.unsub=Mic.sub(ev=>{
+    if(ev.type==='onset'){const w=Math.min(0.3,60/PG.bpm*0.45),e=PG.exp.find(e=>!e.done&&e.onsetT==null&&Math.abs(ev.t-e.t)<=w);if(e)e.onsetT=ev.t;}
+    else if(ev.type==='chord'){const e=PG.exp.find(e=>!e.done&&e.onsetT===ev.t);if(!e)return;e.done=true;
+      const sims=others.map(n=>[n,DSP.cos(ev.ch,TPL({f:chordBy(n).f.map(x=>x<0?-1:x+r.capo)}))]).sort((a,b)=>b[1]-a[1]),mine=(sims.find(s=>s[0]===e.c.shape.n)||[0,0])[1];
+      const off=e.onsetT-e.t,right=mine>=0.55&&sims[0][1]-mine<0.02,ontime=Math.abs(off)<=0.1;PG.st.n++;PG.st.offs.push(off);if(right)PG.st.right++;if(right&&ontime)PG.st.good++;
+      pgChip(`${label(e.c.shape.n)} · ${right?(ontime?'on time':Math.round(Math.abs(off)*1000)+' ms '+(off<0?'early':'late')):'wrong chord?'}`,right&&ontime?'good':right?'late':'wrong');pgSum();}});
+  let shown=-1;
+  Clock.start(PG.bpm,1,(k,t)=>{
+    A.click(t,k%4===0);
+    if(PG.listen){const now=A.ctx.currentTime-(state.settings.latency||0)/1000;for(const e of PG.exp){if(!e.done&&now-e.t>0.6){e.done=true;PG.st.n++;PG.st.miss++;pgChip(`${label(e.c.shape.n)} · no strum heard`,'wrong');pgSum();}}PG.exp=PG.exp.filter(e=>!e.done);}
+    if(k<4){at(t,()=>{const i=$('#pg-info');if(i)i.textContent=`Count-in ${4-k}`;lightBeat('pg-beats',-1);});if(k===0)at(t,()=>pgShow(items,0));return;}
+    const bt=k-4,bar=Math.floor(bt/4),bi=bt%4,it=items[bar%items.length];
+    if(guide)A.strumPart(it.snd.f,t,false,bi===0?1:0.6);
+    if(bi===0&&PG.listen)PG.exp.push({t,c:it,onsetT:null,done:false});
+    at(t,()=>{if(bar!==shown){shown=bar;pgShow(items,bar);}lightBeat('pg-beats',bi);const nx=$('#pg-next');if(nx)nx.classList.toggle('ready',bi===3);});
+  });
+}
+function pgStop(){Clock.stop();if(PG.unsub)PG.unsub();PG.unsub=null;const was=PG.on;PG.on=false;releaseRun(pgStop);const b=$('#pg-btn');if(b){b.textContent='Start';b.classList.add('primary');}lightBeat('pg-beats',-1);$$('#pg-strip .chip').forEach(c=>c.setAttribute('aria-pressed','false'));
+  if(was&&PG.st&&PG.st.n>=4){const s=PG.st,off=s.offs.length?Math.round(1000*s.offs.reduce((a,b)=>a+b,0)/s.offs.length):null;pushRun({d:dkey(),kind:'prog',name:PG.runName,acc:Math.round(100*(s.right+s.good)/(2*s.n)),off,n:s.n,bpm:PG.bpm});save();pgSum(true);}}
 function renderRhythm(){
   const pool=levelChords();RS.set=RS.set.filter(n=>CHORDS.some(c=>c.n===n));if(RS.set.length<2)RS.set=['G','C','D'];
   const c0=chordBy(RS.set[0]),c1=chordBy(RS.set[1]);
@@ -1282,7 +1529,7 @@ function tuPitch(ev){
   note.textContent=near?`${SNAME[s]} string`:SHARP[pc(target)];
   const hz=(440*Math.pow(2,(m-69)/12)).toFixed(1);
   msg.textContent=!near?`${hz} Hz · ${SHARP[pc(target)]}, not a standard open string`:Math.abs(cents)<5?`${hz} Hz · in tune`:cents<0?`${hz} Hz · ${-cents} cents flat: tighten slowly`:`${hz} Hz · ${cents} cents sharp: loosen a little, then come back up`;
-  if(near&&Math.abs(cents)<5){if(++TU.inT>35&&!TU.tuned[s]){TU.tuned[s]=true;const el=$('#tu-s'+s);if(el){el.classList.add('tuned');el.querySelector('span').textContent='in tune';}}}else TU.inT=0;
+  if(near&&Math.abs(cents)<5){if(++TU.inT>35&&!TU.tuned[s]){TU.tuned[s]=true;if(Object.keys(TU.tuned).length>=6&&!state.miles.tuned){state.miles.tuned=true;save();toast('All six strings in tune. Milestone done.');}const el=$('#tu-s'+s);if(el){el.classList.add('tuned');el.querySelector('span').textContent='in tune';}}}else TU.inT=0;
 }
 const NFL={on:false,unsub:null};
 async function nflStart(){if(!await ensureMic())return;claimRun(nflStop);NFL.on=true;NFL.unsub=Mic.sub(ev=>{if(ev.type==='note')nfHear(ev);});renderEar();}
@@ -1348,12 +1595,31 @@ function wcNew(){const pool=earPool(false),c=pool[rnd(pool.length)],opts=shuffle
 function nfNew(){const strs=EAR.nfStr==='ea'?[0,1]:[0,1,2,3,4,5];let s,f;do{s=strs[rnd(strs.length)];f=rnd(13);}while(EAR.nf&&EAR.nf.s===s&&EAR.nf.f===f);EAR.nf={s,f,answered:false};}
 function feedback(ok,txt){const e=$('#ear-fb');if(e){e.className='feedback '+(ok?'good':'wrong');e.textContent=txt;}}
 
+/* ---------------- record & listen back ---------------- */
+const REC={mr:null,chunks:[],takes:[],t0:0,timer:null};
+function recHTML(){return `<div class="row" style="justify-content:space-between"><h2>Record yourself</h2><button class="btn ${REC.mr?'':'teal'}" data-act="rec">${REC.mr?'Stop':'Record'}</button></div>
+  <p class="note">${REC.mr?`Recording… <b class="mono" id="rec-time">0 s</b>. It stops by itself after 2 minutes.`:'Your ears notice things your hands hide: buzzing strings, rushed changes, uneven strums. Record one minute, then listen back like a teacher would.'}</p>
+  ${REC.takes.map((t,i)=>`<div class="stack" style="gap:4px"><span class="score">Take ${REC.takes.length-i} · ${t.at} · ${t.secs} s</span><audio controls src="${t.url}" style="width:100%"></audio>${insideClaude()?'':`<a class="note" href="${t.url}" download="guitar-take-${t.stamp}.${t.ext}">Save this take</a>`}</div>`).join('')}
+  ${REC.takes.length?'<p class="note">Takes are kept until you close the app. Save the ones you want to compare next week.</p>':''}`;}
+function renderRec(){const c=$('#rec-card');if(c)c.innerHTML=recHTML();}
+async function recStart(){
+  if(!await ensureMic())return;
+  if(typeof MediaRecorder==='undefined'){toast('This browser can’t record audio.');return;}
+  let mr;try{mr=new MediaRecorder(Mic.stream);}catch(e){toast('This browser can’t record audio.');return;}
+  REC.mr=mr;REC.chunks=[];mr.ondataavailable=e=>{if(e.data&&e.data.size)REC.chunks.push(e.data);};
+  mr.onstop=()=>{const type=mr.mimeType||'audio/webm',blob=new Blob(REC.chunks,{type}),d=new Date();
+    REC.takes.unshift({url:URL.createObjectURL(blob),secs:Math.max(1,Math.round((Date.now()-REC.t0)/1000)),at:d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),stamp:dkey(d)+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0'),ext:type.includes('mp4')?'m4a':type.includes('ogg')?'ogg':'webm'});
+    REC.takes.slice(3).forEach(t=>URL.revokeObjectURL(t.url));REC.takes=REC.takes.slice(0,3);REC.mr=null;clearInterval(REC.timer);renderRec();};
+  mr.start();REC.t0=Date.now();REC.timer=setInterval(()=>{const s=Math.floor((Date.now()-REC.t0)/1000),e=$('#rec-time');if(e)e.textContent=s+' s';if(s>=120)recStop();},250);renderRec();
+}
+function recStop(){if(REC.mr&&REC.mr.state!=='inactive')REC.mr.stop();}
+
 /* ---------------- LEARN ---------------- */
 const LESSONS=[
  {t:'The neck is a sideways piano',a:'Every fret is one piano key, black keys included. The six strings are six overlapping strips of the same keyboard.',b:'Moving up one fret raises the note one semitone. Twelve frets up, the note repeats an octave higher, which is why fret 12 has the double dot.',h:['Pick the open low E, then fret 12 on the same string. Same note, higher.','Play fret 5 on the low E with the open A string. They match: that is how the strings link up.','Run the note finder on the E and A strings for two minutes.'],go:['ear',{panel:'nf',nfStr:'ea'}],cta:'Open note finder'},
  {t:'Chords are team photos',a:'Three notes stand together for a photo. In a major chord the middle person stands tall. In a minor chord that same person steps down one fret, and the mood flips from bright to sad.',b:'The root names the chord, the third sets the mood, the fifth adds body. The other strings just double those three notes.',h:['Play E, then lift the index finger. That is Em: one note moved.','Play D, then move the top note down a fret. That is Dm.','Do ten rounds of the major or minor ear quiz.'],go:['chords',{chord:'E'}],cta:'Compare E and Em'},
  {t:'Chord changes are a password',a:'You don’t type a password fast by rushing. You type it fast because your fingers know the sequence.',b:'Look for anchor fingers that stay on their string, like a pivot foot in basketball. Move the other fingers together as one block, not one by one.',h:['C to Am: index and middle stay down. Only the ring finger moves.','Do the change slowly ten times. Close your eyes for the last three.','Run one minute of changes and save the score.'],go:['drills',{panel:'changes',a:'C',b:'Am'}],cta:'Drill C ↔ Am'},
- {t:'Strumming is a pendulum',a:'Your strumming hand swings down and up on every beat like a clock pendulum, even when it doesn’t touch the strings.',b:'Downs land on the beats, ups land between them. Missing a strum on purpose is fine; stopping the swing is what breaks the rhythm.',h:['Metronome at 60: one down strum per beat.','Then down, down-up, up-down-up while the hand never stops.','Rhythm switch with G, C and D at 4 beats per chord.'],go:['drills',{panel:'rhythm',set:['G','C','D'],per:4,bpm:60}],cta:'Open rhythm switch'},
+ {t:'Strumming is a pendulum',a:'Your strumming hand swings down and up on every beat like a clock pendulum, even when it doesn’t touch the strings.',b:'Downs land on the beats, ups land between them. Missing a strum on purpose is fine; stopping the swing is what breaks the rhythm.',h:['Metronome at 60: one down strum per beat.','Then down, down-up, up-down-up while the hand never stops.','Rhythm switch with G, C and D at 4 beats per chord.'],go:['drills',{panel:'strum',pat:'downs'}],cta:'Open the strumming trainer'},
  {t:'A scale is a staircase',a:'The major scale is a staircase with two short steps: whole, whole, half, whole, whole, whole, half.',b:'A whole step is two frets, a half step is one. The short steps are where the scale feels like it leans into the next note.',h:['On the B string play frets 1, 3, 5, 6, 8, 10, 12, 13. That is C major on one string.','Notice the short steps at E–F (frets 5–6) and B–C (12–13).','Play C major position 1 with play-along at 60 bpm.'],go:['scales',{root:0,scale:'major',pos:0}],cta:'Open C major'},
  {t:'The pentatonic is five stepping stones',a:'Take away the two slippery stones of the major scale and you can’t fall in the river. Every note left sounds good over the key.',b:'Minor pentatonic is root, ♭3, 4, 5, ♭7. That safety is why almost every guitar solo starts here.',h:['A minor pentatonic, box 1 at fret 5. The index plays fret 5 on every string.','Use the ring finger for fret 7 and the pinky for fret 8.','Play-along at 70 bpm, up and down. Three clean loops, then +5.'],go:['scales',{root:9,scale:'minpent',pos:0}],cta:'Open A minor pentatonic'},
  {t:'Positions are rooms in one house',a:'A scale covers the whole neck, but you live in one room at a time. The rooms share walls, which are the notes they have in common.',b:'Learn one position until it’s automatic, then walk into the next one and find the shared notes.',h:['Play position 1, then position 2 of A minor pentatonic.','Find the notes the two positions share; those are your doorways.','Switch to “Whole neck” to see the full house with your room highlighted.'],go:['scales',{root:9,scale:'minpent',pos:1,whole:true}],cta:'Open position 2'},
@@ -1366,9 +1632,14 @@ LESSONS.push(
  {t:'The 12th fret is a mirror',a:'The neck repeats itself at fret 12, like a mirror laid across the double dots. Everything between the nut and fret 12 appears again above it, an octave higher.',b:'So each string has only 12 frets to learn, and the open-string names (E A D G B E) come back at fret 12.',h:['Play each open string, then the same string at fret 12. Same names, higher.','Find G on the low E string (fret 3), then find it again at fret 15.','Run Find every note for E: one on every string.'],go:['neck',{panel:'notes',note:4,show:'one'}],cta:'Find every E'},
  {t:'Octaves are a knight’s move',a:'Like a chess knight, an octave jumps in an L: two strings up and two frets up. When the jump lands on the B string it stretches to three frets, because that string is tuned a step lower than the pattern.',b:'Every note on the low E and A strings has a twin on the D and G strings this way. Learn the two lowest strings and the octave move hands you two more for free.',h:['Play C on the A string (fret 3), then two strings up and two frets up: G string, fret 5. Same note, higher.','From E on the D string (fret 2), jump to the B string: fret 5, three frets up.','Open the note map for C and trace each knight’s move with your finger before playing it.'],go:['neck',{panel:'notes',note:0,show:'one'}],cta:'Show every C'},
  {t:'One chord, five addresses (CAGED)',a:'A chord isn’t a place, it’s a set of notes. Like a family with five houses on one street, C major lives in five shapes up the neck: the open C, A, G, E and D shapes, each slid until its root lands on a C.',b:'The shapes link like train carriages: where one ends, the next begins, sharing notes. The order never changes (C, A, G, E, D, then C again), so learning the chain once lets you play any chord anywhere.',h:['Pick C major and step through the five shapes. Note which string the root is on in each.','Check each shape with String by string so you know the frets are right, not just the sound.','Walk the neck at 60 bpm, 8 beats per shape. Say the shape name as you move.'],go:['neck',{panel:'chords',root:0,q:'maj'}],cta:'Walk C across the neck'});
+LESSONS.push(
+ {t:'Chords have jobs: home, visit, road home',a:'In any key, three chords do most of the work. I is home. IV is visiting the neighbour: pleasant, a little away. V is the road home: restless until it lands back on I.',b:'Roman numerals name the job, not the chord. In G the jobs go to G, C and D; in C they go to C, F and G. Learn the jobs and every song in a key feels familiar.',h:['In G, play G (home), C (visit), D (road home), then G. Feel D lean back toward G.','Play D and stop. Notice how unfinished it feels: that pull is the V chord’s job.','Play the Pop four progression in G with listening on.'],go:['drills',{panel:'prog',prog:'pop',key:7}],cta:'Play the Pop four'},
+ {t:'A capo is a lift',a:'A capo is a lift that raises the floor of the guitar. You still walk the same rooms (G, C, D shapes), but on a higher floor, so everything sounds higher.',b:'That’s how you play a song in A with the easy G shapes: capo on fret 2. The Progressions drill works out the capo position for any key you pick.',h:['Clip the capo just behind fret 2, close to the fret wire, not on top of it.','Play your G shape: it now sounds as A. Re-tune if the capo pulled the strings sharp.','Play the Pop four in A: the app shows capo 2 and the G-family shapes.'],go:['drills',{panel:'prog',prog:'pop',key:9}],cta:'Pop four in A, with capo'},
+ {t:'Fingertips: break them in like new shoes',a:'New shoes pinch for the first few weeks, then mould to you. Fingertips are the same: soreness is normal at first, and calluses form in two to four weeks of regular playing.',b:'Short, frequent sessions build calluses faster and with less pain than one long one. Steel strings are harder on fingertips than nylon; lighter-gauge strings help.',h:['Play 10–15 minutes, twice a day, rather than an hour once.','Press just behind the fret with the least force that rings clean. Less pressure means less soreness.','Stop if you feel sharp pain or numbness, keep your fretting-hand nails short, and use the Short session on tender days.'],go:['today',{len:'short'}],cta:'Switch to a short session'});
 LESSONS.push({t:'How the app listens: a teacher with eyes closed',a:'Picture a teacher who can’t see your hands. They hear footsteps (each new pluck or strum), recognise voices (the pitch of a single note) and taste the mix in a soup (which notes make up a strummed chord).',b:'That’s exactly what the app does. It catches the moment each note starts, measures its pitch, and compares a strum’s blend of notes with the chord you should be playing. The clearer the sound reaching the mic, the better it judges.',h:['Prop the phone or tablet about 30 cm from the sound hole, in a quiet room.','Run Settings → Calibrate timing once per device, and again if you switch to Bluetooth headphones.','Warm up with the live tuner and one chord check before the session.'],go:['settings',{}],cta:'Open listening settings'});
 function renderLearn(){
   $('#v-learn').innerHTML=`
+  ${pathCard(false)}
   <div><span class="eyebrow">Learn by analogy</span><h1>Ideas you can feel in your hands</h1><p class="muted" style="margin-top:6px;max-width:62ch">Each card gives a picture to hang the idea on, then a short hands-on exercise with the guitar in your lap. “Try it” opens the exact drill.</p></div>
   <div class="lessons">${LESSONS.map((l,i)=>`
     <article class="card lesson">
@@ -1459,8 +1730,9 @@ function go(v,p){
   p=p||{};
   if(v==='scales'){Object.assign(SC,{whole:false},p);if(p.scale==='chrom'&&p.root==null)SC.root=0;scLoadTempo();if(p.bpm)SC.bpm=p.bpm;}
   if(v==='chords'&&p.chord)CS.sel=p.chord;
+  if(v==='today'&&p.len){state.settings.sessLen=p.len;save();}
   if(v==='neck'){['panel','note','show','root','q'].forEach(k=>{if(p[k]!=null)NK[k]=p[k];});if(p.root!=null||p.q)NK.shape=0;}
-  if(v==='drills'){if(p.panel)DR.panel=p.panel;if(p.a){CH.a=p.a;CH.b=p.b;CH.phase='idle';}if(p.set)RS.set=p.set.slice();if(p.per)RS.per=p.per;if(p.bpm)RS.bpm=p.bpm;}
+  if(v==='drills'){if(p.panel)DR.panel=p.panel;if(p.pat)ST.pat=p.pat;if(p.prog)PG.prog=p.prog;if(p.key!=null)PG.key=p.key;if(p.a){CH.a=p.a;CH.b=p.b;CH.phase='idle';}if(p.set)RS.set=p.set.slice();if(p.per)RS.per=p.per;if(p.bpm)RS.bpm=p.bpm;}
   if(v==='ear'){if(p.panel)EAR.panel=p.panel;if(p.nfStr){EAR.nfStr=p.nfStr;EAR.nf=null;}}
   show(v);
 }
@@ -1487,6 +1759,9 @@ const SEG={
  ear:v=>{tuneStop();stopRun();EAR.panel=v;renderEar();},
  'tune-rep':v=>{tuneStop();if(v==='1'){if(EAR.tuneS<0)EAR.tuneS=0;tunePlay(EAR.tuneS);EAR.rep=setInterval(()=>tunePlay(EAR.tuneS),2500);}renderEar();},
  'nf-str':v=>{EAR.nfStr=v;EAR.nf=null;renderEar();},
+ 'sess-len':v=>{state.settings.sessLen=v;save();renderToday();},
+ 'st-listen':v=>{stopRun();ST.listen=v==='1';renderStrum();},
+ 'pg-listen':v=>{stopRun();PG.listen=v==='1';renderProg();},
  'nk-panel':v=>{stopRun();NK.panel=v;renderNeck();},
  'nk-show':v=>{NK.show=v;renderNeckNotes();},
  'nk-q':v=>{stopRun();NK.q=v;NK.shape=0;renderNeckChords();},
@@ -1518,12 +1793,21 @@ document.addEventListener('click',e=>{
    case 'strum':if(CK.on)stopRun();A.init();A.strum(curChord().f,A.now());break;
    case 'arp':if(CK.on)stopRun();A.init();A.arp(curChord().f,A.now());break;
    case 'ck-start':CK.on?stopRun():ckStart(curChord());break;
+   case 'welcomed':state.welcomed=true;save();renderToday();break;
+   case 'go-tuner':go('ear',{panel:'tuner'});break;
+   case 'mile':{const it=milestones().items[+el.dataset.i];if(it)go(it.go[0],it.go[1]);break;}
+   case 'level-up':state.settings.level=+el.dataset.l;EAR.mm=null;EAR.wc=null;save();toast(`Welcome to level ${el.dataset.l}. New chords and drills are unlocked.`);renderView(VIEW);break;
+   case 'rec':REC.mr?recStop():recStart();break;
+   case 'st-pat':stopRun();ST.pat=el.dataset.id;renderStrum();break;
+   case 'st-start':ST.on?stopRun():stStart();break;
+   case 'pg-prog':{stopRun();const was=progBy(PG.prog).mode;PG.prog=el.dataset.id;const now=progBy(PG.prog).mode;if(was!==now)PG.key=now==='min'?4:7;renderProg();break;}
+   case 'pg-start':PG.on?stopRun():pgStart();break;
    case 'nk-shape':stopRun();NK.shape=+el.dataset.i;renderNeckChords();A.init();A.strum(NK.cur.f,A.now());break;
    case 'fn-start':FN.on?(stopRun(),renderNeckNotes()):fnStart();break;
    case 'wk-start':WK.on?stopRun():wkStart();break;
    case 'tu-start':TU.on?stopRun():tuStart();break;
    case 'nf-listen':nflStart();break;
-   case 'mic':if(Mic.on){stopRun();Mic.stop();}else ensureMic();break;
+   case 'mic':if(Mic.on){recStop();stopRun();Mic.stop();}else ensureMic();break;
    case 'mic-help':{const t=$('#toast');if(t)t.hidden=true;toggleSettings(true);setTimeout(()=>{const i=$('#install');if(i)i.scrollIntoView({block:'start'});},50);break;}
    case 'cal':CAL.on?stopRun():calStart();break;
    case 'lat':state.settings.latency=Math.max(0,Math.min(600,(state.settings.latency||0)+(+el.dataset.d)));save();renderSettings();break;
@@ -1536,7 +1820,7 @@ document.addEventListener('click',e=>{
       if(el.dataset.confirm!=='1'){el.dataset.confirm='1';el.textContent='Tap again to replace this device’s progress';el.classList.add('primary');break;}
       state=merge(DEFAULT(),data);state.updatedAt=0;save();A.apply();renderSettings();renderView(VIEW);$('#load-msg').textContent='Progress loaded.';break;}
    case 'chord-drill':{const n=CS.sel,pairs=[].concat(PAIRS[1],PAIRS[2],PAIRS[3]),p=pairs.find(x=>x.includes(n));go('drills',{panel:'changes',a:n,b:p?(p[0]===n?p[1]:p[0]):(n==='G'?'C':'G')});break;}
-   case 'bpm':{const d=+el.dataset.d;if(el.dataset.t==='sc')scSetBpm(SC.bpm+d);else if(el.dataset.t==='wk'){WK.bpm=Math.max(40,Math.min(200,WK.bpm+d));if(WK.on)Clock.bpm=WK.bpm;$('#wk-bpm').textContent=WK.bpm;$('#wk-range').value=WK.bpm;}else{RS.bpm=Math.max(40,Math.min(200,RS.bpm+d));Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;$('#rs-range').value=RS.bpm;}break;}
+   case 'bpm':{const d=+el.dataset.d;if(el.dataset.t==='sc')scSetBpm(SC.bpm+d);else if(el.dataset.t==='st'||el.dataset.t==='pg'){const o=el.dataset.t==='st'?ST:PG;o.bpm=Math.max(40,Math.min(200,o.bpm+d));if(o.on)Clock.bpm=o.bpm;$('#'+el.dataset.t+'-bpm').textContent=o.bpm;$('#'+el.dataset.t+'-range').value=o.bpm;}else if(el.dataset.t==='wk'){WK.bpm=Math.max(40,Math.min(200,WK.bpm+d));if(WK.on)Clock.bpm=WK.bpm;$('#wk-bpm').textContent=WK.bpm;$('#wk-range').value=WK.bpm;}else{RS.bpm=Math.max(40,Math.min(200,RS.bpm+d));Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;$('#rs-range').value=RS.bpm;}break;}
    case 'sc-start':SC.running?scStop():scStart();break;
    case 'sc-next':scNext();break;
    case 'rs-toggle':{stopRun();const n=el.dataset.n,i=RS.set.indexOf(n);if(i>=0){if(RS.set.length>2)RS.set.splice(i,1);}else RS.set.push(n);renderRhythm();break;}
@@ -1569,6 +1853,8 @@ document.addEventListener('change',e=>{
   if(t.id==='sc-root'){stopRun();SC.root=+t.value;scLoadTempo();renderScales();}
   else if(t.id==='sc-scale'){stopRun();SC.scale=t.value;SC.pos=0;scLoadTempo();renderScales();}
   else if(t.id==='sc-pos'){stopRun();SC.pos=+t.value;scLoadTempo();renderScales();}
+  else if(t.id==='st-chord'){stopRun();ST.chord=t.value;renderStrum();}
+  else if(t.id==='pg-key'){stopRun();PG.key=+t.value;renderProg();}
   else if(t.id==='nk-note'){stopRun();NK.note=+t.value;FN.found=[];renderNeckNotes();}
   else if(t.id==='nk-root'){stopRun();NK.root=+t.value;NK.shape=0;renderNeckChords();}
   else if(t.id==='ch-a'||t.id==='ch-b'){stopRun();CH[t.id==='ch-a'?'a':'b']=t.value;CH.phase='idle';renderChanges();}
@@ -1576,6 +1862,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='sc-range')scSetBpm(+t.value);
+  else if(t.id==='st-range'||t.id==='pg-range'){const k=t.id.slice(0,2),o=k==='st'?ST:PG;o.bpm=+t.value;if(o.on)Clock.bpm=o.bpm;$('#'+k+'-bpm').textContent=o.bpm;}
   else if(t.id==='wk-range'){WK.bpm=+t.value;if(WK.on)Clock.bpm=WK.bpm;$('#wk-bpm').textContent=WK.bpm;}
   else if(t.id==='rs-range'){RS.bpm=+t.value;Clock.bpm=RS.bpm;$('#rs-bpm').textContent=RS.bpm;}
   else if(t.id==='vol'){state.settings.vol=+t.value;if(A.ctx)A.master.gain.value=state.settings.vol;clearTimeout(window._vt);window._vt=setTimeout(save,500);}
