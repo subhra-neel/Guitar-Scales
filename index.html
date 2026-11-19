@@ -703,6 +703,23 @@ function todayPlan(){
   const order={short:['tune','cod','changes','strum'],std:['tune','spider','neck','cod','changes','strum','prog','scale','ear'],long:['tune','spider','neck','cod','changes','strum','prog','rhythm','scale','walk','ear']}[state.settings.sessLen||'std'];
   return order.map(k=>S[k]);
 }
+function installCard(){
+  if(!window.PWA||PWA.installed()||state.installDismissed)return '';
+  const ua=navigator.userAgent,ios=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&'ontouchend' in document),
+    br=/OPR\/|Opera/.test(ua)?'opera':/SamsungBrowser/.test(ua)?'samsung':/EdgA\//.test(ua)?'edge':/Firefox|FxiOS/.test(ua)?'firefox':ios?'safari':'chrome';
+  const how={chrome:'Tap ⋮ at the top right → <b>Install app</b>. If you only see “Add to Home screen”, tap it and then choose <b>Install</b>, not “Create shortcut”.',
+    samsung:'Tap ≡ at the bottom → <b>Add page to</b> → <b>Apps screen</b> (or Home screen).',
+    edge:'Tap ⋯ at the bottom → <b>Add to phone</b>.',
+    opera:'Opera installs this as a plain shortcut that opens in the browser. For a real offline app, open this page in <b>Chrome</b> and install it there.',
+    firefox:'Firefox doesn’t install web apps. Open this page in <b>Chrome</b> and tap ⋮ → Install app.',
+    safari:'Tap the <b>Share</b> button → <b>Add to Home Screen</b> → Add. Then open it from the new icon.'}[br];
+  return `<div class="card stack" style="border-color:var(--brass);border-width:2px">
+    <div class="row" style="justify-content:space-between"><h2>Install as an app</h2>${PWA.canInstall()?'<button class="btn primary" data-act="pwa-install">Install</button>':''}</div>
+    <p>Installed, it opens full-screen from its own icon and works with no internet. You’re in a browser tab right now.</p>
+    ${PWA.canInstall()?'':`<p>${how}</p>`}
+    <p class="note">Added this page to your home screen before? Delete that old icon first: it’s a bookmark and will always open the browser. Once installed, this card disappears.</p>
+    <div class="row"><button class="btn" data-act="install-hide">Hide this</button></div></div>`;
+}
 function milestones(){
   const lv=state.settings.level,st=state.stats,find=state.neck.find;
   const clean=g=>CHORDS.filter(c=>c.g===g&&st.chords[c.n]&&st.chords[c.n].ok>0);
@@ -761,6 +778,7 @@ function renderToday(){
     </div>
   </div>
   <div class="row">${seg('sess-len',[['short','Short · 10 min'],['std','Standard'],['long','Long']],state.settings.sessLen||'std','Session length')}</div>
+  ${installCard()}
   ${state.welcomed?'':`<div class="card stack" style="border-color:var(--teal);border-width:2px">
     <h2>Welcome. Four steps to get going</h2>
     <ol style="margin:0;padding-left:1.2em;gap:6px" class="stack"><li>Open Settings and pick your guitar (steel or nylon) and level. New to guitar? Level 1.</li><li>Tune up with the live tuner on the Ear tab.</li><li>Run Settings → Calibrate timing, so the app judges early and late fairly.</li><li>Work down today’s list from the top. Tick each step, then log the session. Ten minutes a day beats an hour on Sunday.</li></ol>
@@ -1805,6 +1823,7 @@ document.addEventListener('click',e=>{
    case 'ck-start':CK.on?stopRun():ckStart(curChord());break;
    case 'pwa-install':window.PWA&&PWA.install();break;
    case 'pwa-check':window.PWA&&PWA.check(true);break;
+   case 'install-hide':state.installDismissed=true;save();renderToday();break;
    case 'welcomed':state.welcomed=true;save();renderToday();break;
    case 'go-tuner':go('ear',{panel:'tuner'});break;
    case 'mile':{const it=milestones().items[+el.dataset.i];if(it)go(it.go[0],it.go[1]);break;}
@@ -1896,7 +1915,7 @@ Sync.init();
 <div id="updbar" hidden role="status"><span id="updt">A new version is ready.</span><button id="updb" type="button">Update</button></div>
 <script>
 (function(){
-var APP_VERSION='1.1',deferred=null,bar=document.getElementById('updbar');
+var APP_VERSION='1.2',deferred=null,bar=document.getElementById('updbar');
 function msg(t){var e=document.getElementById('pwa-msg');if(e)e.textContent=t;}
 function hardUpdate(){var p=[];
  if('serviceWorker' in navigator)p.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister();}));}));
@@ -1908,12 +1927,14 @@ function check(manual){if(manual)msg('Checking…');
  fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
   if(j&&j.version&&j.version!==APP_VERSION)showUpdate(j.version);else if(manual)msg('You are on the latest version ('+APP_VERSION+').');
  }).catch(function(){if(manual)msg('Could not check. Are you online?');});}
-window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e;if(!document.getElementById('settings').hidden&&typeof renderSettings==='function')renderSettings();});
-window.addEventListener('appinstalled',function(){deferred=null;if(typeof toast==='function')toast('Installed. Open Guitar from your home screen.');});
+function rerender(){try{if(!document.getElementById('settings').hidden)renderSettings();if(VIEW==='today'&&!Run.stop)renderToday();}catch(e){}}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e;rerender();});
+window.addEventListener('appinstalled',function(){deferred=null;rerender();if(typeof toast==='function')toast('Installed. Open Guitar from your home screen; it works offline.');});
 window.PWA={version:APP_VERSION,check:check,
  canInstall:function(){return !!deferred;},
  installed:function(){return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;},
- install:function(){if(!deferred)return;deferred.prompt();deferred.userChoice.then(function(){deferred=null;if(typeof renderSettings==='function')renderSettings();});}};
+ install:function(){if(!deferred)return;deferred.prompt();deferred.userChoice.then(function(){deferred=null;rerender();});}};
+rerender();
 document.addEventListener('visibilitychange',function(){if(!document.hidden)check(false);});
 check(false);
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(function(r){r.update().catch(function(){});}).catch(function(){});}
