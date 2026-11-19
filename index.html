@@ -1,7 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#3A271E"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Guitar Trainer">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Ccircle cx='17' cy='17' r='16' fill='%233A271E'/%3E%3Ccircle cx='17' cy='17' r='12.6' fill='none' stroke='%23C8901F' stroke-width='2'/%3E%3Ccircle cx='17' cy='17' r='8.3' fill='%232B1C15'/%3E%3C/svg%3E"><link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Ccircle cx='17' cy='17' r='16' fill='%233A271E'/%3E%3Ccircle cx='17' cy='17' r='12.6' fill='none' stroke='%23C8901F' stroke-width='2'/%3E%3Ccircle cx='17' cy='17' r='8.3' fill='%232B1C15'/%3E%3C/svg%3E">
-<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<meta name="theme-color" content="#3A271E"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Guitar">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}
+#updbar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 10px);z-index:40;display:flex;gap:12px;align-items:center;background:var(--fg,#1A201D);color:var(--bg,#fff);border-radius:14px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.25);font-size:.92rem;max-width:calc(100% - 32px)}
+#updbar button{border:0;border-radius:10px;background:var(--brass,#9C6610);color:var(--on-brass,#fff);font-weight:700;padding:8px 12px;font-size:.9rem}</style>
 </head><body>
 <title>Guitar Chords and Scales Trainer</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -442,12 +444,13 @@ function setSync(s){const el=$('#sync');el.dataset.s=s;el.querySelector('span').
 /* ---------------- audio ---------------- */
 const A={ctx:null,cache:new Map(),
  init(){
-  if(!this.ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;this.ctx=new C();
+  if(!this.ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;setSession(Mic.on?'play-and-record':'playback');this.ctx=new C({latencyHint:'interactive'});
    this.master=this.ctx.createGain();this.comp=this.ctx.createDynamicsCompressor();this.master.connect(this.comp).connect(this.ctx.destination);
    this.tone=this.ctx.createBiquadFilter();this.tone.type='lowpass';
    this.body=this.ctx.createBiquadFilter();this.body.type='peaking';this.body.frequency.value=190;this.body.Q.value=1.1;this.body.gain.value=4;
    this.tone.connect(this.body).connect(this.master);this.apply();}
-  if(this.ctx.state==='suspended')this.ctx.resume();
+  if(this.ctx.state!=='running'){try{this.ctx.resume();}catch(e){}}
+  if(!this.unlocked){try{const b=this.ctx.createBuffer(1,1,22050),s=this.ctx.createBufferSource();s.buffer=b;s.connect(this.ctx.destination);s.start(0);}catch(e){}this.unlocked=true;}
  },
  apply(){if(!this.ctx)return;this.master.gain.value=state.settings.vol;this.tone.frequency.value=state.settings.tone==='nylon'?2600:6800;this.cache.clear();},
  now(){return this.ctx.currentTime+0.03;},
@@ -482,6 +485,9 @@ function claimRun(fn){if(Run.stop&&Run.stop!==fn)Run.stop();Run.stop=fn;Wake.on(
 function releaseRun(fn){if(Run.stop===fn){Run.stop=null;Wake.off();}}
 function stopRun(){if(Run.stop)Run.stop();}
 
+function setSession(t){try{if(navigator.audioSession&&navigator.audioSession.type!==t)navigator.audioSession.type=t;}catch(e){}}
+['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev,function un(){A.init();if(A.ctx&&A.ctx.state==='running')['pointerdown','touchend','keydown'].forEach(x=>document.removeEventListener(x,un,true));},true));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&A.ctx&&A.ctx.state!=='running'){try{A.ctx.resume();}catch(e){}}});
 /* ---------------- listening engine ---------------- */
 /* ---- DSP core (shared by app and tests) ---- */
 const DSP={
@@ -527,6 +533,7 @@ const Mic={on:false,err:'',subs:new Set(),level:0,floorHist:[],floor:0.002,cmin:
  async start(){
   A.init();if(this.on)return true;
   if(!A.ctx||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){this.err=insideClaude()?'blocked':'nosupport';return false;}
+  setSession('play-and-record');
   try{this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});}
   catch(e){this.err=insideClaude()?'blocked':(e&&(e.name==='NotAllowedError'||e.name==='SecurityError')?'denied':'nodevice');return false;}
   const c=A.ctx;this.src=c.createMediaStreamSource(this.stream);
@@ -537,10 +544,11 @@ const Mic={on:false,err:'',subs:new Set(),level:0,floorHist:[],floor:0.002,cmin:
   this.big=c.createAnalyser();this.big.fftSize=8192;this.big.smoothingTimeConstant=0;
   this.src.connect(this.hp);this.hp.connect(this.lp1);this.lp1.connect(this.lp2);this.lp2.connect(this.small);this.hp.connect(this.big);
   this.td=new Float32Array(2048);this.ds=new Float32Array(1024);this.sdb=new Float32Array(1024);this.bdb=new Float32Array(4096);this.lin=new Float32Array(1024);
-  this.on=true;this.err='';this.timer=setInterval(()=>this.frame(),16);updateMicChip();return true;
+  this.on=true;this.err='';this.timer=setInterval(()=>this.frame(),16);updateMicChip();this.idleLater();return true;
  },
- stop(){clearInterval(this.timer);try{this.stream.getTracks().forEach(t=>t.stop());}catch(e){}try{this.src.disconnect();}catch(e){}this.on=false;this.level=0;this.prevLin=null;updateMicChip();},
- sub(fn){this.subs.add(fn);return()=>this.subs.delete(fn);},
+ stop(){clearInterval(this.timer);clearTimeout(this.idleT);try{this.stream.getTracks().forEach(t=>t.stop());}catch(e){}try{this.src.disconnect();}catch(e){}this.on=false;this.level=0;this.prevLin=null;setSession('playback');updateMicChip();},
+ sub(fn){this.subs.add(fn);clearTimeout(this.idleT);return()=>{this.subs.delete(fn);this.idleLater();};},
+ idleLater(ms=1500){clearTimeout(this.idleT);this.idleT=setTimeout(()=>{if(this.on&&!this.subs.size&&!(REC&&REC.mr)&&Date.now()>=(this.hold||0))this.stop();},ms);},
  emit(ev){this.subs.forEach(fn=>{try{fn(ev);}catch(e){console.error(e);}});},
  frame(){
   const c=A.ctx,sr=c.sampleRate,now=c.currentTime,td=this.td;
@@ -1590,7 +1598,8 @@ function renderEar(){
   }
 }
 function earPool(tri){const p=levelChords();return tri?p.filter(c=>/^[A-G][#b]?m?$/.test(c.n)):p;}
-function mmPlay(){A.init();if(!EAR.mm){const c=earPool(true)[rnd(earPool(true).length)];EAR.mm={c,answered:false};}A.strum(EAR.mm.c.f,A.now());}
+function freeSpeaker(){if(Mic.on&&!Mic.subs.size&&!(REC&&REC.mr)){Mic.hold=0;Mic.stop();}}
+function mmPlay(){freeSpeaker();A.init();if(!EAR.mm){const c=earPool(true)[rnd(earPool(true).length)];EAR.mm={c,answered:false};}A.strum(EAR.mm.c.f,A.now());}
 function wcNew(){const pool=earPool(false),c=pool[rnd(pool.length)],opts=shuffle([c.n,...shuffle(pool.filter(x=>x.n!==c.n)).slice(0,3).map(x=>x.n)]);EAR.wc={c,opts,answered:false};}
 function nfNew(){const strs=EAR.nfStr==='ea'?[0,1]:[0,1,2,3,4,5];let s,f;do{s=strs[rnd(strs.length)];f=rnd(13);}while(EAR.nf&&EAR.nf.s===s&&EAR.nf.f===f);EAR.nf={s,f,answered:false};}
 function feedback(ok,txt){const e=$('#ear-fb');if(e){e.className='feedback '+(ok?'good':'wrong');e.textContent=txt;}}
@@ -1609,7 +1618,7 @@ async function recStart(){
   REC.mr=mr;REC.chunks=[];mr.ondataavailable=e=>{if(e.data&&e.data.size)REC.chunks.push(e.data);};
   mr.onstop=()=>{const type=mr.mimeType||'audio/webm',blob=new Blob(REC.chunks,{type}),d=new Date();
     REC.takes.unshift({url:URL.createObjectURL(blob),secs:Math.max(1,Math.round((Date.now()-REC.t0)/1000)),at:d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),stamp:dkey(d)+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0'),ext:type.includes('mp4')?'m4a':type.includes('ogg')?'ogg':'webm'});
-    REC.takes.slice(3).forEach(t=>URL.revokeObjectURL(t.url));REC.takes=REC.takes.slice(0,3);REC.mr=null;clearInterval(REC.timer);renderRec();};
+    REC.takes.slice(3).forEach(t=>URL.revokeObjectURL(t.url));REC.takes=REC.takes.slice(0,3);REC.mr=null;clearInterval(REC.timer);renderRec();Mic.idleLater();};
   mr.start();REC.t0=Date.now();REC.timer=setInterval(()=>{const s=Math.floor((Date.now()-REC.t0)/1000),e=$('#rec-time');if(e)e.textContent=s+' s';if(s>=120)recStop();},250);renderRec();
 }
 function recStop(){if(REC.mr&&REC.mr.state!=='inactive')REC.mr.stop();}
@@ -1663,6 +1672,7 @@ function renderSettings(){
     <div class="field"><span>Level</span>${seg('level',[['1','1 Open'],['2','2 Colour'],['3','3 Barre']],s.level,'Level')}</div>
     <label class="field"><span>Volume</span><input type="range" id="vol" min="0.2" max="1" step="0.05" value="${s.vol}"></label>
   </div>
+  <div class="row"><button class="btn" data-act="test-sound">Test sound</button><span class="note">No sound? Raise the media volume while it plays. On iPhone, turn the silent switch off.</span></div>
   <p class="note">The screen stays awake while a drill is running. Inside Claude, progress syncs to your account so phone and tablet stay in step; your own copy saves on each device, so use the progress code below to move it.</p>
 
   <div class="stack" style="border-top:1px solid var(--line);padding-top:14px">
@@ -1677,9 +1687,9 @@ function renderSettings(){
   </div>
 
   <div class="stack" id="install" style="border-top:1px solid var(--line);padding-top:14px">
-    <h2>${insideClaude()?'Use the microphone on your phone and tablet':'Your own copy'}</h2>
+    <h2>${insideClaude()?'Use the microphone on your phone and tablet':'App'}</h2>
     ${insideClaude()?`<p>Claude’s viewer blocks the microphone for every page, so listening only works in your own copy of this app at a normal web address. Everything else works here.</p>
-    <ol style="margin:0;padding-left:1.2em" class="stack"><li>On your phone and tablet, open <b class="mono" style="user-select:all">subhra-neel.github.io/Guitar-Scales</b></li><li>Allow the microphone when asked, then use the browser’s “Add to Home screen”.</li><li>Run Calibrate timing there once per device.</li><li>Copy your progress code here and load it there.</li></ol>`:`<p>You’re running your own copy, so the microphone works here. Progress is saved in this browser on this device; use the progress code to move it.</p>`}
+    <ol style="margin:0;padding-left:1.2em" class="stack"><li>On your phone and tablet, open <b class="mono" style="user-select:all">subhra-neel.github.io/Guitar-Scales</b></li><li>Allow the microphone when asked, then use the browser’s “Add to Home screen”.</li><li>Run Calibrate timing there once per device.</li><li>Copy your progress code here and load it there.</li></ol>`:`<p>Progress is saved on this device; use the progress code to move it.</p>${window.PWA?`<div class="row">${PWA.canInstall()?'<button class="btn primary" data-act="pwa-install">Install app</button>':''}<button class="btn" data-act="pwa-check">Check for updates</button><span class="note" id="pwa-msg">Version ${PWA.version}${PWA.installed()?' · installed':''}</span></div>${!PWA.installed()&&!PWA.canInstall()?'<p class="note">To install: in Chrome tap ⋮ → Install app (or Add to Home screen). On iPhone, Safari → Share → Add to Home Screen.</p>':''}`:''}`}
   </div>
 
   <div class="stack" style="border-top:1px solid var(--line);padding-top:14px">
@@ -1738,7 +1748,7 @@ function go(v,p){
 }
 function toggleSettings(force){const el=$('#settings'),open=force!=null?force:el.hidden;if(open)renderSettings();el.hidden=!open;$('#setbtn').setAttribute('aria-expanded',String(open));if(open)window.scrollTo(0,0);}
 function tuneStop(){clearInterval(EAR.rep);EAR.rep=null;}
-function tunePlay(s){A.init();EAR.tuneS=s;A.pluck(OPEN[s],A.now(),0.75);}
+function tunePlay(s){if(!TU.on)freeSpeaker();A.init();EAR.tuneS=s;A.pluck(OPEN[s],A.now(),0.75);}
 
 const SEG={
  tone:v=>{state.settings.tone=v;A.apply();save();renderSettings();renderView(VIEW);},
@@ -1793,6 +1803,8 @@ document.addEventListener('click',e=>{
    case 'strum':if(CK.on)stopRun();A.init();A.strum(curChord().f,A.now());break;
    case 'arp':if(CK.on)stopRun();A.init();A.arp(curChord().f,A.now());break;
    case 'ck-start':CK.on?stopRun():ckStart(curChord());break;
+   case 'pwa-install':window.PWA&&PWA.install();break;
+   case 'pwa-check':window.PWA&&PWA.check(true);break;
    case 'welcomed':state.welcomed=true;save();renderToday();break;
    case 'go-tuner':go('ear',{panel:'tuner'});break;
    case 'mile':{const it=milestones().items[+el.dataset.i];if(it)go(it.go[0],it.go[1]);break;}
@@ -1807,7 +1819,8 @@ document.addEventListener('click',e=>{
    case 'wk-start':WK.on?stopRun():wkStart();break;
    case 'tu-start':TU.on?stopRun():tuStart();break;
    case 'nf-listen':nflStart();break;
-   case 'mic':if(Mic.on){recStop();stopRun();Mic.stop();}else ensureMic();break;
+   case 'mic':if(Mic.on){recStop();stopRun();Mic.stop();}else ensureMic().then(ok=>{if(ok){Mic.hold=Date.now()+5000;Mic.idleLater(5200);toast('Mic works. Each drill switches it on only while it listens, so the speaker stays at full volume the rest of the time.');}});break;
+   case 'test-sound':{A.init();A.strum(chordBy('G').f,A.now()+0.05);setTimeout(()=>{const ok=A.ctx&&A.ctx.state==='running';toast(ok?'You should hear a G chord. Silent? Raise the media volume while it plays, and on iPhone turn the silent switch off.':'Sound is blocked. Tap Test sound again; if it stays silent, close and reopen the app.');},400);break;}
    case 'mic-help':{const t=$('#toast');if(t)t.hidden=true;toggleSettings(true);setTimeout(()=>{const i=$('#install');if(i)i.scrollIntoView({block:'start'});},50);break;}
    case 'cal':CAL.on?stopRun():calStart();break;
    case 'lat':state.settings.latency=Math.max(0,Math.min(600,(state.settings.latency||0)+(+el.dataset.d)));save();renderSettings();break;
@@ -1834,8 +1847,8 @@ document.addEventListener('click',e=>{
    case 'mm-play':mmPlay();break;
    case 'mm-ans':{if(!EAR.mm||EAR.mm.answered){feedback(false,'Play a chord first.');break;}const right=isMinor(EAR.mm.c.n)?'min':'maj',ok=el.dataset.v===right;EAR.mm.answered=true;state.ear.mm.t++;if(ok)state.ear.mm.c++;save();
       const c=EAR.mm.c;EAR.mm=null;renderEar();$$('.ans').forEach(b=>b.classList.add(b.dataset.v===right?'good':(b.dataset.v===el.dataset.v?'wrong':'x')));feedback(ok,`${ok?'Yes':'Not this time'}: that was ${label(c.n)}, ${right==='min'?'minor':'major'}. Press play for the next one.`);break;}
-   case 'wc-play':A.init();if(!EAR.wc||EAR.wc.answered){wcNew();renderEar();}A.strum(EAR.wc.c.f,A.now());break;
-   case 'wc-new':A.init();wcNew();renderEar();A.strum(EAR.wc.c.f,A.now());break;
+   case 'wc-play':freeSpeaker();A.init();if(!EAR.wc||EAR.wc.answered){wcNew();renderEar();}A.strum(EAR.wc.c.f,A.now());break;
+   case 'wc-new':freeSpeaker();A.init();wcNew();renderEar();A.strum(EAR.wc.c.f,A.now());break;
    case 'wc-ans':{const q=EAR.wc;if(!q||q.answered)break;q.answered=true;const ok=el.dataset.n===q.c.n;state.ear.wc.t++;if(ok)state.ear.wc.c++;save();
       $$('[data-act="wc-ans"]').forEach(b=>{if(b.dataset.n===q.c.n)b.classList.add('good');else if(b===el)b.classList.add('wrong');});
       $('.score',$('#ear-body')).textContent=`${state.ear.wc.c} / ${state.ear.wc.t} correct`;
@@ -1880,4 +1893,30 @@ show(RENDER[location.hash.slice(1)]?location.hash.slice(1):'today',true);
 Sync.init();
 </script>
 
+<div id="updbar" hidden role="status"><span id="updt">A new version is ready.</span><button id="updb" type="button">Update</button></div>
+<script>
+(function(){
+var APP_VERSION='1.1',deferred=null,bar=document.getElementById('updbar');
+function msg(t){var e=document.getElementById('pwa-msg');if(e)e.textContent=t;}
+function hardUpdate(){var p=[];
+ if('serviceWorker' in navigator)p.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister();}));}));
+ if(window.caches)p.push(caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k.indexOf('guitar-trainer')===0;}).map(function(k){return caches.delete(k);}));}));
+ Promise.all(p).catch(function(){}).then(function(){location.reload();});}
+function showUpdate(v){document.getElementById('updt').textContent='Version '+v+' is ready.';bar.hidden=false;
+ document.getElementById('updb').onclick=function(){if(typeof stopRun==='function')stopRun();this.textContent='Updating…';hardUpdate();};}
+function check(manual){if(manual)msg('Checking…');
+ fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+  if(j&&j.version&&j.version!==APP_VERSION)showUpdate(j.version);else if(manual)msg('You are on the latest version ('+APP_VERSION+').');
+ }).catch(function(){if(manual)msg('Could not check. Are you online?');});}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e;if(!document.getElementById('settings').hidden&&typeof renderSettings==='function')renderSettings();});
+window.addEventListener('appinstalled',function(){deferred=null;if(typeof toast==='function')toast('Installed. Open Guitar from your home screen.');});
+window.PWA={version:APP_VERSION,check:check,
+ canInstall:function(){return !!deferred;},
+ installed:function(){return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;},
+ install:function(){if(!deferred)return;deferred.prompt();deferred.userChoice.then(function(){deferred=null;if(typeof renderSettings==='function')renderSettings();});}};
+document.addEventListener('visibilitychange',function(){if(!document.hidden)check(false);});
+check(false);
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(function(r){r.update().catch(function(){});}).catch(function(){});}
+})();
+</script>
 </body></html>
